@@ -104,3 +104,8 @@ _TODO: ключевые замечания от `/review` и `/security-review`,
 | ⚠️1 | Race condition в `delete()` (`ClientServiceImpl`, `TaskServiceImpl`, `NoteServiceImpl`): `findOrThrow()` и `deleteById()` — два отдельных вызова без блокировки, при параллельных DELETE-запросах на один и тот же id возможна необработанная гонка | Низкий | Делать `delete()` через один атомарный вызов репозитория либо ловить/маппить `EmptyResultDataAccessException` в `GlobalExceptionHandler` |
 | ⚠️2 | DTO (`ClientRequest/Response`, `TaskRequest/Response`, `NoteRequest/Response`, `DashboardResponse`) — вручную написанные классы с getter/setter вместо Java `record` | Низкий (стиль/поддерживаемость) | Переписать DTO на `record` (Java 21 + Spring Boot 3.3 это поддерживают из коробки) |
 | ⚠️3 | `DashboardServiceImpl.getStats()` — 4 отдельных запроса (`count()` + 3× `countByStatus()`) вместо одного агрегирующего запроса с `GROUP BY` | Низкий (не масштабируется) | Заменить на один `@Query("select t.status, count(t) from Task t group by t.status")` |
+<img width="1438" height="737" alt="image" src="https://github.com/user-attachments/assets/ad438edd-15d7-4e91-b596-d8f6649ff4be" />
+<img width="1429" height="503" alt="image" src="https://github.com/user-attachments/assets/1343bc63-1d00-4dbb-b909-b130bc790615" />
+<img width="1424" height="658" alt="image" src="https://github.com/user-attachments/assets/dfc1cbec-f390-4e37-898c-6fab8817a856" />
+
+
