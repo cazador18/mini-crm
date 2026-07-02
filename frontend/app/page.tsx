@@ -3,25 +3,38 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { dashboardApi, type DashboardStats } from '@/lib/api';
+import { STATUS_THEME, STATUS_ORDER } from '@/lib/theme';
+import { CheckIcon, ClockIcon, InboxIcon, UsersIcon } from '@/components/icons';
+import type { ComponentType } from 'react';
+
+const STATUS_ICON: Record<(typeof STATUS_ORDER)[number], ComponentType<{ className?: string }>> = {
+  NEW: InboxIcon,
+  IN_PROGRESS: ClockIcon,
+  DONE: CheckIcon,
+};
 
 type Card = {
   label: string;
   value: number;
-  colorCls: string;
   href: string;
+  icon: ComponentType<{ className?: string }>;
+  chipBg: string;
+  chipText: string;
+  gradient: string;
 };
 
-function StatCard({ label, value, colorCls, href }: Card) {
+function StatCard({ label, value, href, icon: Icon, chipBg, chipText, gradient }: Card) {
   return (
     <Link
       href={href}
-      className="block rounded-lg border border-gray-200 p-5 hover:shadow-md transition-shadow"
+      className={`group block rounded-2xl border border-gray-100 bg-white bg-gradient-to-br ${gradient} p-5 shadow-sm transition-shadow hover:shadow-md`}
     >
-      <div className={`text-xs font-medium uppercase tracking-wider mb-1 ${colorCls}`}>
-        {label}
+      <div className={`inline-flex h-11 w-11 items-center justify-center rounded-xl ${chipBg} ${chipText}`}>
+        <Icon className="h-5 w-5" />
       </div>
-      <div className="text-3xl font-bold text-gray-900">{value}</div>
-      <div className="text-xs text-gray-400 mt-2">→ перейти</div>
+      <div className="mt-4 text-3xl font-bold text-gray-900">{value}</div>
+      <div className="mt-1 text-xs font-medium uppercase tracking-wider text-gray-500">{label}</div>
+      <div className="mt-3 text-xs text-gray-400 transition-colors group-hover:text-gray-600">→ перейти</div>
     </Link>
   );
 }
@@ -41,10 +54,10 @@ export default function HomePage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-gray-900 mb-6">Дашборд</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-gray-900 mb-6">Дашборд</h1>
 
       {error && (
-        <div className="bg-red-50 text-red-700 border border-red-200 rounded p-3 text-sm mb-4">
+        <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl p-3 text-sm mb-4">
           {error}
         </div>
       )}
@@ -52,7 +65,7 @@ export default function HomePage() {
       {loading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="animate-pulse bg-gray-100 rounded-lg h-28" />
+            <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-2xl h-36" />
           ))}
         </div>
       ) : stats ? (
@@ -60,27 +73,24 @@ export default function HomePage() {
           <StatCard
             label="Клиенты"
             value={stats.totalClients}
-            colorCls="text-blue-600"
             href="/clients"
+            icon={UsersIcon}
+            chipBg="bg-indigo-50"
+            chipText="text-indigo-600"
+            gradient="from-indigo-50/60 to-white"
           />
-          <StatCard
-            label="Новые задачи"
-            value={stats.tasksByStatus.NEW ?? 0}
-            colorCls="text-gray-500"
-            href="/tasks"
-          />
-          <StatCard
-            label="В работе"
-            value={stats.tasksByStatus.IN_PROGRESS ?? 0}
-            colorCls="text-yellow-600"
-            href="/tasks"
-          />
-          <StatCard
-            label="Завершённые"
-            value={stats.tasksByStatus.DONE ?? 0}
-            colorCls="text-green-600"
-            href="/tasks"
-          />
+          {STATUS_ORDER.map(status => (
+            <StatCard
+              key={status}
+              label={STATUS_THEME[status].label}
+              value={stats.tasksByStatus[status] ?? 0}
+              href="/tasks"
+              icon={STATUS_ICON[status]}
+              chipBg={STATUS_THEME[status].chipBg}
+              chipText={STATUS_THEME[status].chipText}
+              gradient={STATUS_THEME[status].gradient}
+            />
+          ))}
         </div>
       ) : null}
     </div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { ClientInput } from '@/lib/api';
+import { CheckIcon, XIcon } from '@/components/icons';
 
 type Props = {
   initial?: ClientInput;
@@ -27,15 +28,16 @@ export default function ClientForm({ initial, onSubmit, onCancel, saving }: Prop
   };
 
   const inputCls =
-    'border border-gray-300 rounded px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
+    'w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500';
+  const labelCls = 'mb-1.5 block text-sm font-medium text-gray-700';
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end"
+      className="mb-6 grid grid-cols-1 gap-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:grid-cols-3 sm:items-end"
     >
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Имя *</label>
+        <label className={labelCls}>Имя *</label>
         <input
           className={inputCls}
           value={name}
@@ -45,7 +47,7 @@ export default function ClientForm({ initial, onSubmit, onCancel, saving }: Prop
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Email *</label>
+        <label className={labelCls}>Email *</label>
         <input
           className={inputCls}
           type="email"
@@ -56,7 +58,7 @@ export default function ClientForm({ initial, onSubmit, onCancel, saving }: Prop
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Телефон</label>
+        <label className={labelCls}>Телефон</label>
         <input
           className={inputCls}
           value={phone}
@@ -64,19 +66,21 @@ export default function ClientForm({ initial, onSubmit, onCancel, saving }: Prop
           placeholder="+7 999 000-00-00"
         />
       </div>
-      <div className="sm:col-span-3 flex gap-2 pt-1">
+      <div className="flex gap-2 pt-1 sm:col-span-3">
         <button
           type="submit"
           disabled={saving}
-          className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
         >
+          <CheckIcon className="h-4 w-4" />
           {saving ? 'Сохранение…' : initial ? 'Сохранить' : 'Создать'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 rounded text-sm border border-gray-300 hover:bg-gray-100"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
         >
+          <XIcon className="h-4 w-4" />
           Отмена
         </button>
       </div>

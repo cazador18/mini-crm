@@ -3,32 +3,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import { clientsApi, tasksApi, type Client, type Task, type TaskInput } from '@/lib/api';
 import TaskForm from '@/components/TaskForm';
+import { PencilIcon, PlusIcon, TrashIcon } from '@/components/icons';
+import { PRIORITY_ORDER, PRIORITY_THEME, STATUS_ORDER, STATUS_THEME } from '@/lib/theme';
 
 type FormMode = { mode: 'create' } | { mode: 'edit'; task: Task } | null;
 
-const STATUS_LABELS: Record<Task['status'], string> = {
-  NEW: 'Новая',
-  IN_PROGRESS: 'В работе',
-  DONE: 'Готово',
-};
+function StatusBadge({ status }: { status: Task['status'] }) {
+  const theme = STATUS_THEME[status];
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${theme.badge}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${theme.dot}`} />
+      {theme.label}
+    </span>
+  );
+}
 
-const STATUS_BADGE: Record<Task['status'], string> = {
-  NEW: 'bg-gray-100 text-gray-700',
-  IN_PROGRESS: 'bg-blue-100 text-blue-700',
-  DONE: 'bg-green-100 text-green-700',
-};
-
-const PRIORITY_LABELS: Record<Task['priority'], string> = {
-  LOW: 'Низкий',
-  MEDIUM: 'Средний',
-  HIGH: 'Высокий',
-};
-
-const PRIORITY_BADGE: Record<Task['priority'], string> = {
-  LOW: 'bg-gray-100 text-gray-600',
-  MEDIUM: 'bg-yellow-100 text-yellow-700',
-  HIGH: 'bg-red-100 text-red-700',
-};
+function PriorityBadge({ priority }: { priority: Task['priority'] }) {
+  const theme = PRIORITY_THEME[priority];
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${theme.badge}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${theme.dot}`} />
+      {theme.label}
+    </span>
+  );
+}
 
 export default function TasksPage() {
   const [tasks, setTasks]       = useState<Task[]>([]);
@@ -105,18 +103,19 @@ export default function TasksPage() {
       : undefined;
 
   const selectCls =
-    'border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white';
+    'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500';
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Задачи</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Задачи</h1>
         {!formMode && (
           <button
             onClick={() => setFormMode({ mode: 'create' })}
-            className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700"
           >
-            + Новая задача
+            <PlusIcon className="h-4 w-4" />
+            Новая задача
           </button>
         )}
       </div>
@@ -141,8 +140,8 @@ export default function TasksPage() {
             onChange={e => setStatusFilter(e.target.value as Task['status'] | '')}
           >
             <option value="">Все</option>
-            {(Object.entries(STATUS_LABELS) as [Task['status'], string][]).map(([val, label]) => (
-              <option key={val} value={val}>{label}</option>
+            {STATUS_ORDER.map(status => (
+              <option key={status} value={status}>{STATUS_THEME[status].label}</option>
             ))}
           </select>
         </div>
@@ -172,7 +171,7 @@ export default function TasksPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-700 border border-red-200 rounded p-3 text-sm mb-4">
+        <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl p-3 text-sm mb-4">
           {error}
         </div>
       )}
@@ -182,9 +181,9 @@ export default function TasksPage() {
       ) : tasks.length === 0 ? (
         <p className="text-sm text-gray-500">Задач не найдено.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <table className="min-w-full divide-y divide-gray-100 text-sm">
+            <thead className="bg-gray-50/60">
               <tr>
                 {['Заголовок', 'Клиент', 'Статус', 'Приоритет', 'Дедлайн', ''].map(h => (
                   <th
@@ -196,9 +195,9 @@ export default function TasksPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-50">
               {tasks.map(task => (
-                <tr key={task.id} className="hover:bg-gray-50">
+                <tr key={task.id} className="transition-colors hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-900">
                     {task.title}
                     {task.description && (
@@ -209,14 +208,10 @@ export default function TasksPage() {
                     {clientMap.get(task.clientId) ?? '—'}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${STATUS_BADGE[task.status]}`}>
-                      {STATUS_LABELS[task.status]}
-                    </span>
+                    <StatusBadge status={task.status} />
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${PRIORITY_BADGE[task.priority]}`}>
-                      {PRIORITY_LABELS[task.priority]}
-                    </span>
+                    <PriorityBadge priority={task.priority} />
                   </td>
                   <td className="px-4 py-3 text-gray-400">
                     {task.deadline
@@ -224,18 +219,24 @@ export default function TasksPage() {
                       : '—'}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <button
-                      onClick={() => setFormMode({ mode: 'edit', task })}
-                      className="text-blue-600 hover:underline text-sm"
-                    >
-                      Редактировать
-                    </button>
-                    <button
-                      onClick={() => handleDelete(task.id, task.title)}
-                      className="text-red-600 hover:underline text-sm ml-4"
-                    >
-                      Удалить
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setFormMode({ mode: 'edit', task })}
+                        aria-label={`Редактировать «${task.title}»`}
+                        title="Редактировать"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                      >
+                        <PencilIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(task.id, task.title)}
+                        aria-label={`Удалить «${task.title}»`}
+                        title="Удалить"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

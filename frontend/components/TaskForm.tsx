@@ -2,18 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import type { Client, TaskInput } from '@/lib/api';
-
-const STATUS_LABELS: Record<string, string> = {
-  NEW: 'Новая',
-  IN_PROGRESS: 'В работе',
-  DONE: 'Готово',
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  LOW: 'Низкий',
-  MEDIUM: 'Средний',
-  HIGH: 'Высокий',
-};
+import { PRIORITY_ORDER, PRIORITY_THEME, STATUS_ORDER, STATUS_THEME } from '@/lib/theme';
+import { CheckIcon, XIcon } from '@/components/icons';
 
 type Props = {
   initial?: TaskInput;
@@ -53,15 +43,16 @@ export default function TaskForm({ initial, clients, onSubmit, onCancel, saving 
   };
 
   const inputCls =
-    'border border-gray-300 rounded px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white';
+    'w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500';
+  const labelCls = 'mb-1.5 block text-sm font-medium text-gray-700';
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end"
+      className="mb-6 grid grid-cols-1 gap-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:grid-cols-3 sm:items-end"
     >
       <div className="sm:col-span-2">
-        <label className="block text-xs font-medium text-gray-600 mb-1">Заголовок *</label>
+        <label className={labelCls}>Заголовок *</label>
         <input
           className={inputCls}
           value={title}
@@ -72,7 +63,7 @@ export default function TaskForm({ initial, clients, onSubmit, onCancel, saving 
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Клиент *</label>
+        <label className={labelCls}>Клиент *</label>
         <select
           className={inputCls}
           value={clientId}
@@ -87,25 +78,25 @@ export default function TaskForm({ initial, clients, onSubmit, onCancel, saving 
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Статус</label>
+        <label className={labelCls}>Статус</label>
         <select className={inputCls} value={status} onChange={e => setStatus(e.target.value)}>
-          {Object.entries(STATUS_LABELS).map(([val, label]) => (
-            <option key={val} value={val}>{label}</option>
+          {STATUS_ORDER.map(s => (
+            <option key={s} value={s}>{STATUS_THEME[s].label}</option>
           ))}
         </select>
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Приоритет</label>
+        <label className={labelCls}>Приоритет</label>
         <select className={inputCls} value={priority} onChange={e => setPriority(e.target.value)}>
-          {Object.entries(PRIORITY_LABELS).map(([val, label]) => (
-            <option key={val} value={val}>{label}</option>
+          {PRIORITY_ORDER.map(p => (
+            <option key={p} value={p}>{PRIORITY_THEME[p].label}</option>
           ))}
         </select>
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Дедлайн</label>
+        <label className={labelCls}>Дедлайн</label>
         <input
           className={inputCls}
           type="date"
@@ -115,7 +106,7 @@ export default function TaskForm({ initial, clients, onSubmit, onCancel, saving 
       </div>
 
       <div className="sm:col-span-3">
-        <label className="block text-xs font-medium text-gray-600 mb-1">Описание</label>
+        <label className={labelCls}>Описание</label>
         <textarea
           className={inputCls + ' resize-none'}
           rows={2}
@@ -125,19 +116,21 @@ export default function TaskForm({ initial, clients, onSubmit, onCancel, saving 
         />
       </div>
 
-      <div className="sm:col-span-3 flex gap-2">
+      <div className="flex gap-2 sm:col-span-3">
         <button
           type="submit"
           disabled={saving}
-          className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
         >
+          <CheckIcon className="h-4 w-4" />
           {saving ? 'Сохранение…' : initial ? 'Сохранить' : 'Создать'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 rounded text-sm border border-gray-300 hover:bg-gray-100"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
         >
+          <XIcon className="h-4 w-4" />
           Отмена
         </button>
       </div>
