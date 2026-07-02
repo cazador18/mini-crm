@@ -1,34 +1,19 @@
-package com.evogroup.minicrm.model;
+package com.evogroup.minicrm.dto;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+import com.evogroup.minicrm.model.TaskPriority;
+import com.evogroup.minicrm.model.TaskStatus;
+
 import java.time.LocalDate;
 
-@Entity
-@Table(name = "tasks")
-public class Task {
+public class TaskResponse {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @NotBlank
     private String title;
-
-    @Column(columnDefinition = "TEXT")
     private String description;
-
-    @Enumerated(EnumType.STRING)
-    private TaskStatus status = TaskStatus.NEW;
-
-    @Enumerated(EnumType.STRING)
-    private TaskPriority priority = TaskPriority.MEDIUM;
-
+    private TaskStatus status;
+    private TaskPriority priority;
     private LocalDate deadline;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "client_id")
-    private Client client;
+    private Long clientId;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -48,6 +33,6 @@ public class Task {
     public LocalDate getDeadline() { return deadline; }
     public void setDeadline(LocalDate deadline) { this.deadline = deadline; }
 
-    public Client getClient() { return client; }
-    public void setClient(Client client) { this.client = client; }
+    public Long getClientId() { return clientId; }
+    public void setClientId(Long clientId) { this.clientId = clientId; }
 }

@@ -1,29 +1,14 @@
-package com.evogroup.minicrm.model;
+package com.evogroup.minicrm.dto;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;
 
-@Entity
-@Table(name = "clients")
-public class Client {
+public class ClientResponse {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @NotBlank
     private String name;
-
-    @NotBlank
-    @Email
     private String email;
-
     private String phone;
-
-    @Column(name = "created_at", updatable = false)
-    private Instant createdAt = Instant.now();
+    private Instant createdAt;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

@@ -1,37 +1,27 @@
-package com.evogroup.minicrm.model;
+package com.evogroup.minicrm.dto;
 
-import jakarta.persistence.*;
+import com.evogroup.minicrm.model.TaskPriority;
+import com.evogroup.minicrm.model.TaskStatus;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
 import java.time.LocalDate;
 
-@Entity
-@Table(name = "tasks")
-public class Task {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class TaskRequest {
 
     @NotBlank
     private String title;
 
-    @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Enumerated(EnumType.STRING)
-    private TaskStatus status = TaskStatus.NEW;
+    private TaskStatus status;
 
-    @Enumerated(EnumType.STRING)
-    private TaskPriority priority = TaskPriority.MEDIUM;
+    private TaskPriority priority;
 
     private LocalDate deadline;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "client_id")
-    private Client client;
-
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    @NotNull
+    private Long clientId;
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
@@ -48,6 +38,6 @@ public class Task {
     public LocalDate getDeadline() { return deadline; }
     public void setDeadline(LocalDate deadline) { this.deadline = deadline; }
 
-    public Client getClient() { return client; }
-    public void setClient(Client client) { this.client = client; }
+    public Long getClientId() { return clientId; }
+    public void setClientId(Long clientId) { this.clientId = clientId; }
 }

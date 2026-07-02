@@ -30,8 +30,8 @@ spring:
       on-profile: docker
   datasource:
     url: jdbc:postgresql://db:5432/minicrm
-    username: minicrm
-    password: minicrm
+    username: ${DB_USERNAME:minicrm}
+    password: ${DB_PASSWORD:minicrm}
   jpa:
     hibernate:
       ddl-auto: update
@@ -48,3 +48,13 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+
+---
+spring:
+  config:
+    activate:
+      on-profile: integration-test
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false

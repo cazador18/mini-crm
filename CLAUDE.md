@@ -1,80 +1,110 @@
-# Mini-CRM / Task Tracker — контекст проекта для Claude Code
+# CLAUDE.md
 
-## Что это
-Учебный MVP-проект (фуллстек): мини-CRM с клиентами и задачами.
-Цель — освоить Claude Code (модели, skills, subagents, MCP, slash-команды, плагины),
-а не построить прод-систему. См. `docs/ТЗ.md` (или исходное задание) для полного контекста.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Стек
-- **Backend**: Java 21, Spring Boot 3, Spring Data JPA, REST API
-- **DB**: PostgreSQL (через Docker), профиль `test` — H2
-- **Frontend**: Next.js (App Router) + TypeScript, Tailwind
-- **Тесты**: JUnit 5, Mockito, Spring Boot Test, Testcontainers (интеграционные)
-- **Инфраструктура**: Docker + docker-compose (backend + frontend + db одной командой)
+## Project purpose
 
-## Структура репозитория
-```
-mini-crm/
-├── backend/                 # Spring Boot приложение
-│   ├── src/main/java/com/evogroup/minicrm/
-│   │   ├── controller/      # REST контроллеры (тонкие, без бизнес-логики)
-│   │   ├── service/         # бизнес-логика
-│   │   ├── repository/      # Spring Data JPA репозитории
-│   │   ├── model/           # JPA-сущности (Client, Task, статусы/приоритеты)
-│   │   ├── dto/             # DTO для запросов/ответов (не отдаём Entity наружу)
-│   │   ├── exception/       # кастомные исключения + @ControllerAdvice
-│   │   └── config/          # конфигурация (CORS, OpenAPI и т.п.)
-│   ├── src/test/            # unit + интеграционные тесты
-│   └── Dockerfile
-├── frontend/                # Next.js приложение
-│   ├── app/                 # страницы (App Router): clients, tasks, dashboard
-│   ├── components/          # UI-компоненты
-│   ├── lib/                 # API-клиент, типы, утилиты
-│   └── Dockerfile
-├── docker-compose.yml
-├── .claude/
-│   ├── skills/               # кастомные Skills проекта
-│   ├── agents/                # кастомные субагенты
-│   └── commands/              # кастомные slash-команды
-└── README.md
-```
+Learning MVP: a mini-CRM with clients and tasks. Goal is to practice Claude Code features (skills, subagents, MCP, slash commands) — not to build a production system.
 
-## Архитектурные принципы (SOLID)
-- Контроллер: только маппинг HTTP ↔ DTO, без логики.
-- Сервис: вся бизнес-логика, одна ответственность на класс.
-- Репозиторий: только доступ к данным (Spring Data JPA).
-- Зависимости между слоями — через интерфейсы там, где это оправдано (например, `ClientService` интерфейс + `ClientServiceImpl`).
-- DTO отдельно от Entity — не возвращать JPA-сущности напрямую из контроллеров.
+## Stack
 
-## Домейн
-- **Client**: id, name, email, phone, createdAt
-- **Task**: id, title, description, status (NEW / IN_PROGRESS / DONE), priority (LOW / MEDIUM / HIGH), deadline, clientId
+- **Backend**: Java 21, Spring Boot 3.3, Spring Data JPA, Bean Validation — in `backend/`
+- **Frontend**: Next.js 14 (App Router) + TypeScript + Tailwind — in `frontend/`
+- **DB**: PostgreSQL 16 (via Docker); H2 in-memory for local dev and tests
 
-## Команды разработки
+## Commands
+
 ```bash
-# Запуск всего стека
+# Full stack (Docker)
 docker compose up --build
 
-# Backend локально
+# Backend — local dev (H2 in-memory, no Docker needed)
 cd backend && ./mvnw spring-boot:run
 
-# Frontend локально
+# Backend — all tests
+cd backend && ./mvnw test
+
+# Backend — single test class
+cd backend && ./mvnw test -Dtest=ClientServiceTest
+
+# Backend — single test method
+cd backend && ./mvnw test -Dtest=ClientServiceTest#createClient_shouldReturnDto
+
+# Frontend — local dev
 cd frontend && npm run dev
 
-# Тесты backend
-cd backend && ./mvnw test
+# Frontend — lint
+cd frontend && npm run lint
 ```
 
-## Чек-лист перед сдачей
-- [ ] `docker compose up` поднимает весь стек
-- [ ] CRUD клиентов и задач работает end-to-end через UI
-- [ ] Фильтры по статусу/клиенту + дашборд работают
-- [ ] Минимум 1 свой Skill и 1 свой субагент применены, описаны в README
-- [ ] Тесты: unit / интеграционные / регрессионные, % покрытия в README
-- [ ] Пройдены `/review` и `/security-review`, замечания исправлены
-- [ ] README заполнен (что сделано, как запустить, что освоено в Claude Code)
+## Spring profiles
 
-## Заметки для Claude Code
-- Перед крупными изменениями использовать режим планирования (plan mode).
-- Коммитить осмысленно и часто.
-- Не писать код руками — формулировать задачи и итеративно проверять результат.
+| Profile            | Datasource | DDL          | When used                          |
+|--------------------|------------|--------------|------------------------------------|
+| `dev`              | H2 in-mem  | `update`     | Default for local run              |
+| `docker`           | PostgreSQL | `update`     | Docker Compose                     |
+| `test`             | H2 in-mem  | `create-drop`| `./mvnw test` (unit tests)         |
+| `integration-test` | PostgreSQL (Testcontainers) | `create-drop` | IT controller tests |
+
+H2 console available at `http://localhost:8080/h2-console` when running with `dev` profile.
+
+### Running integration tests (Testcontainers) via Docker on macOS
+
+```bash
+# Requires Docker Desktop running. On macOS, ports are on the host — use host.docker.internal:
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd)/backend:/app \
+  -w /app \
+  -e TESTCONTAINERS_RYUK_DISABLED=true \
+  -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
+  maven:3.9-eclipse-temurin-21 \
+  mvn test -Dtest="ClientControllerIT,TaskControllerIT" --no-transfer-progress
+```
+
+## Architecture
+
+Strict layered architecture — never bypass a layer:
+
+```
+Controller → Service (interface + impl) → Repository → Entity
+                ↓
+              DTOs  (never expose Entity directly from controllers)
+```
+
+- **Controllers** (`controller/`): HTTP mapping only, no business logic. Call service methods, return DTOs.
+- **Services** (`service/`): all business logic. Define as interface + impl pair (e.g. `ClientService` / `ClientServiceImpl`).
+- **Repositories** (`repository/`): Spring Data JPA only. No custom SQL unless JPA can't handle it.
+- **Models** (`model/`): JPA entities — `Client`, `Task`, enums `TaskStatus` (NEW/IN_PROGRESS/DONE), `TaskPriority` (LOW/MEDIUM/HIGH).
+- **DTOs** (`dto/`): separate request/response objects. Entities stay in the service layer.
+- **Exceptions** (`exception/`): custom exceptions + `@ControllerAdvice` for global error handling.
+- **Config** (`config/`): CORS, OpenAPI/Swagger, and other Spring configuration.
+
+## Domain model
+
+- `Client`: id, name, email, phone, createdAt (Instant)
+- `Task`: id, title, description, status, priority, deadline (LocalDate), client (ManyToOne → Client)
+
+`Task.client` is `FetchType.LAZY` — always use DTOs in API responses to avoid lazy-loading issues.
+
+## Current state
+
+Fully implemented MVP:
+
+- **Backend**: entities, DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, global exception handler, CORS config
+- **Frontend**: dashboard (`/`), `/clients` (CRUD), `/tasks` (CRUD + filters by status/clientId)
+- **Tests**: unit tests (Mockito) for ClientServiceImpl + TaskServiceImpl; integration tests (Testcontainers PostgreSQL) for ClientController + TaskController
+
+## Testing approach
+
+- **Unit tests**: service layer with Mockito mocks
+- **Integration tests**: REST API + real DB via Testcontainers (PostgreSQL)
+- **Regression tests**: key CRUD + filter scenarios
+
+Integration tests that use Testcontainers require Docker to be running.
+
+## Claude Code workflow notes
+
+- Use plan mode before large changes.
+- Prefer interface + impl pattern for services.
+- Do not return JPA entities from controllers — always map to DTOs.
