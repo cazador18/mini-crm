@@ -45,10 +45,18 @@ export type DashboardStats = {
   tasksByStatus: Record<'NEW' | 'IN_PROGRESS' | 'DONE', number>;
 };
 
+export type PageResponse<T> = {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
 // ── API functions ──────────────────────────────────────────────────────────
 
 export const clientsApi = {
-  getAll: () => request<Client[]>('/api/clients'),
+  getAll: () => request<PageResponse<Client>>('/api/clients').then(p => p.content),
   create: (data: ClientInput) =>
     request<Client>('/api/clients', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: ClientInput) =>
@@ -63,7 +71,7 @@ export const tasksApi = {
     if (params?.status) qs.set('status', params.status);
     if (params?.clientId) qs.set('clientId', String(params.clientId));
     const q = qs.toString();
-    return request<Task[]>(`/api/tasks${q ? `?${q}` : ''}`);
+    return request<PageResponse<Task>>(`/api/tasks${q ? `?${q}` : ''}`).then(p => p.content);
   },
   create: (data: TaskInput) =>
     request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(data) }),

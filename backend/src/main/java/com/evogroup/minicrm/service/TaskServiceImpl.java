@@ -1,5 +1,6 @@
 package com.evogroup.minicrm.service;
 
+import com.evogroup.minicrm.dto.PageResponse;
 import com.evogroup.minicrm.dto.TaskRequest;
 import com.evogroup.minicrm.dto.TaskResponse;
 import com.evogroup.minicrm.exception.ClientNotFoundException;
@@ -11,10 +12,10 @@ import com.evogroup.minicrm.repository.ClientRepository;
 import com.evogroup.minicrm.repository.TaskRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 @Transactional
@@ -46,18 +47,18 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<TaskResponse> findAll(TaskStatus status, Long clientId) {
-        List<Task> tasks;
+    public PageResponse<TaskResponse> findAll(TaskStatus status, Long clientId, Pageable pageable) {
+        Page<Task> tasks;
         if (status != null && clientId != null) {
-            tasks = taskRepository.findByStatusAndClientIdOrderByIdAsc(status, clientId);
+            tasks = taskRepository.findByStatusAndClientIdOrderByIdAsc(status, clientId, pageable);
         } else if (status != null) {
-            tasks = taskRepository.findByStatusOrderByIdAsc(status);
+            tasks = taskRepository.findByStatusOrderByIdAsc(status, pageable);
         } else if (clientId != null) {
-            tasks = taskRepository.findByClientIdOrderByIdAsc(clientId);
+            tasks = taskRepository.findByClientIdOrderByIdAsc(clientId, pageable);
         } else {
-            tasks = taskRepository.findAllByOrderByIdAsc();
+            tasks = taskRepository.findAllByOrderByIdAsc(pageable);
         }
-        return tasks.stream().map(this::toResponse).toList();
+        return PageResponse.of(tasks.map(this::toResponse));
     }
 
     @Override

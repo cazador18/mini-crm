@@ -2,15 +2,15 @@ package com.evogroup.minicrm.service;
 
 import com.evogroup.minicrm.dto.ClientRequest;
 import com.evogroup.minicrm.dto.ClientResponse;
+import com.evogroup.minicrm.dto.PageResponse;
 import com.evogroup.minicrm.exception.ClientNotFoundException;
 import com.evogroup.minicrm.model.Client;
 import com.evogroup.minicrm.repository.ClientRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 @Transactional
@@ -41,10 +41,8 @@ public class ClientServiceImpl implements ClientService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ClientResponse> findAll() {
-        return repository.findAllByOrderByIdAsc().stream()
-                .map(this::toResponse)
-                .toList();
+    public PageResponse<ClientResponse> findAll(Pageable pageable) {
+        return PageResponse.of(repository.findAllByOrderByIdAsc(pageable).map(this::toResponse));
     }
 
     @Override

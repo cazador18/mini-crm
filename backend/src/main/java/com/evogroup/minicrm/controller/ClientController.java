@@ -2,13 +2,14 @@ package com.evogroup.minicrm.controller;
 
 import com.evogroup.minicrm.dto.ClientRequest;
 import com.evogroup.minicrm.dto.ClientResponse;
+import com.evogroup.minicrm.dto.PageResponse;
 import com.evogroup.minicrm.service.ClientService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/clients")
@@ -26,8 +27,9 @@ public class ClientController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ClientResponse>> findAll() {
-        return ResponseEntity.ok(service.findAll());
+    public ResponseEntity<PageResponse<ClientResponse>> findAll(
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(service.findAll(pageable));
     }
 
     @GetMapping("/{id}")

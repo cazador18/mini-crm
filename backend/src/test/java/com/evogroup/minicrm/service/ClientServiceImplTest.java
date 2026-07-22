@@ -2,6 +2,7 @@ package com.evogroup.minicrm.service;
 
 import com.evogroup.minicrm.dto.ClientRequest;
 import com.evogroup.minicrm.dto.ClientResponse;
+import com.evogroup.minicrm.dto.PageResponse;
 import com.evogroup.minicrm.exception.ClientNotFoundException;
 import com.evogroup.minicrm.model.Client;
 import com.evogroup.minicrm.repository.ClientRepository;
@@ -12,6 +13,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
 import java.util.List;
@@ -88,13 +92,16 @@ class ClientServiceImplTest {
         second.setEmail("bob@example.com");
         second.setCreatedAt(Instant.now());
 
-        when(repository.findAllByOrderByIdAsc()).thenReturn(List.of(client, second));
+        Pageable pageable = PageRequest.of(0, 20);
+        when(repository.findAllByOrderByIdAsc(pageable))
+                .thenReturn(new PageImpl<>(List.of(client, second), pageable, 2));
 
-        List<ClientResponse> result = service.findAll();
+        PageResponse<ClientResponse> result = service.findAll(pageable);
 
-        assertThat(result).hasSize(2);
-        assertThat(result).extracting(ClientResponse::getName)
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getContent()).extracting(ClientResponse::getName)
                 .containsExactly("Alice", "Bob");
+        assertThat(result.getTotalElements()).isEqualTo(2);
     }
 
     @Test

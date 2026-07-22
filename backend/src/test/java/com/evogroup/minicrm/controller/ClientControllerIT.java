@@ -78,9 +78,38 @@ class ClientControllerIT extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/clients"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].name", is("Alice")))
-                .andExpect(jsonPath("$[1].name", is("Bob")));
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].name", is("Alice")))
+                .andExpect(jsonPath("$.content[1].name", is("Bob")))
+                .andExpect(jsonPath("$.totalElements", is(2)))
+                .andExpect(jsonPath("$.totalPages", is(1)))
+                .andExpect(jsonPath("$.page", is(0)))
+                .andExpect(jsonPath("$.size", is(20)));
+    }
+
+    @Test
+    void findAllClients_defaultPageSize_returns20() throws Exception {
+        for (int i = 0; i < 21; i++) {
+            createClientViaApi("Client " + i, "client" + i + "@example.com");
+        }
+
+        mockMvc.perform(get("/api/clients"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(20)))
+                .andExpect(jsonPath("$.totalElements", is(21)))
+                .andExpect(jsonPath("$.totalPages", is(2)));
+    }
+
+    @Test
+    void findAllClients_explicitPage_returnsRemainder() throws Exception {
+        for (int i = 0; i < 21; i++) {
+            createClientViaApi("Client " + i, "client" + i + "@example.com");
+        }
+
+        mockMvc.perform(get("/api/clients").param("page", "1").param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.page", is(1)));
     }
 
     @Test

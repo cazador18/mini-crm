@@ -1,15 +1,16 @@
 package com.evogroup.minicrm.controller;
 
+import com.evogroup.minicrm.dto.PageResponse;
 import com.evogroup.minicrm.dto.TaskRequest;
 import com.evogroup.minicrm.dto.TaskResponse;
 import com.evogroup.minicrm.model.TaskStatus;
 import com.evogroup.minicrm.service.TaskService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -27,10 +28,11 @@ public class TaskController {
     }
 
     @GetMapping
-    public ResponseEntity<List<TaskResponse>> findAll(
+    public ResponseEntity<PageResponse<TaskResponse>> findAll(
             @RequestParam(required = false) TaskStatus status,
-            @RequestParam(required = false) Long clientId) {
-        return ResponseEntity.ok(service.findAll(status, clientId));
+            @RequestParam(required = false) Long clientId,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(service.findAll(status, clientId, pageable));
     }
 
     @GetMapping("/{id}")

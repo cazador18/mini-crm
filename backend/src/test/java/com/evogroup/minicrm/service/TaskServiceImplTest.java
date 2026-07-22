@@ -1,5 +1,6 @@
 package com.evogroup.minicrm.service;
 
+import com.evogroup.minicrm.dto.PageResponse;
 import com.evogroup.minicrm.dto.TaskRequest;
 import com.evogroup.minicrm.dto.TaskResponse;
 import com.evogroup.minicrm.exception.ClientNotFoundException;
@@ -17,6 +18,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -114,45 +118,53 @@ class TaskServiceImplTest {
 
     @Test
     void findAll_noFilter_returnsAll() {
-        when(taskRepository.findAllByOrderByIdAsc()).thenReturn(List.of(task));
+        Pageable pageable = PageRequest.of(0, 20);
+        when(taskRepository.findAllByOrderByIdAsc(pageable))
+                .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
 
-        List<TaskResponse> result = service.findAll(null, null);
+        PageResponse<TaskResponse> result = service.findAll(null, null, pageable);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getTitle()).isEqualTo("Fix bug");
-        verify(taskRepository).findAllByOrderByIdAsc();
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).getTitle()).isEqualTo("Fix bug");
+        verify(taskRepository).findAllByOrderByIdAsc(pageable);
     }
 
     @Test
     void findAll_byStatus_filtersCorrectly() {
-        when(taskRepository.findByStatusOrderByIdAsc(TaskStatus.NEW)).thenReturn(List.of(task));
+        Pageable pageable = PageRequest.of(0, 20);
+        when(taskRepository.findByStatusOrderByIdAsc(TaskStatus.NEW, pageable))
+                .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
 
-        List<TaskResponse> result = service.findAll(TaskStatus.NEW, null);
+        PageResponse<TaskResponse> result = service.findAll(TaskStatus.NEW, null, pageable);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getStatus()).isEqualTo(TaskStatus.NEW);
-        verify(taskRepository).findByStatusOrderByIdAsc(TaskStatus.NEW);
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).getStatus()).isEqualTo(TaskStatus.NEW);
+        verify(taskRepository).findByStatusOrderByIdAsc(TaskStatus.NEW, pageable);
     }
 
     @Test
     void findAll_byClientId_filtersCorrectly() {
-        when(taskRepository.findByClientIdOrderByIdAsc(1L)).thenReturn(List.of(task));
+        Pageable pageable = PageRequest.of(0, 20);
+        when(taskRepository.findByClientIdOrderByIdAsc(1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
 
-        List<TaskResponse> result = service.findAll(null, 1L);
+        PageResponse<TaskResponse> result = service.findAll(null, 1L, pageable);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getClientId()).isEqualTo(1L);
-        verify(taskRepository).findByClientIdOrderByIdAsc(1L);
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).getClientId()).isEqualTo(1L);
+        verify(taskRepository).findByClientIdOrderByIdAsc(1L, pageable);
     }
 
     @Test
     void findAll_byStatusAndClientId_filtersCorrectly() {
-        when(taskRepository.findByStatusAndClientIdOrderByIdAsc(TaskStatus.NEW, 1L)).thenReturn(List.of(task));
+        Pageable pageable = PageRequest.of(0, 20);
+        when(taskRepository.findByStatusAndClientIdOrderByIdAsc(TaskStatus.NEW, 1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
 
-        List<TaskResponse> result = service.findAll(TaskStatus.NEW, 1L);
+        PageResponse<TaskResponse> result = service.findAll(TaskStatus.NEW, 1L, pageable);
 
-        assertThat(result).hasSize(1);
-        verify(taskRepository).findByStatusAndClientIdOrderByIdAsc(TaskStatus.NEW, 1L);
+        assertThat(result.getContent()).hasSize(1);
+        verify(taskRepository).findByStatusAndClientIdOrderByIdAsc(TaskStatus.NEW, 1L, pageable);
     }
 
     @Test

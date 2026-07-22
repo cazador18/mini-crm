@@ -123,7 +123,22 @@ class TaskControllerIT extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/tasks"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)));
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.totalElements", is(2)))
+                .andExpect(jsonPath("$.size", is(20)));
+    }
+
+    @Test
+    void findAllTasks_defaultPageSize_returns20() throws Exception {
+        for (int i = 0; i < 21; i++) {
+            createTaskViaApi("Task " + i, "NEW", savedClient.getId());
+        }
+
+        mockMvc.perform(get("/api/tasks"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(20)))
+                .andExpect(jsonPath("$.totalElements", is(21)))
+                .andExpect(jsonPath("$.totalPages", is(2)));
     }
 
     @Test
@@ -133,8 +148,8 @@ class TaskControllerIT extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/tasks").param("status", "NEW"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].status", is("NEW")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].status", is("NEW")));
     }
 
     @Test
@@ -149,8 +164,8 @@ class TaskControllerIT extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/tasks").param("clientId", savedClient.getId().toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].clientId", is(savedClient.getId().intValue())));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].clientId", is(savedClient.getId().intValue())));
     }
 
     @Test
@@ -162,8 +177,8 @@ class TaskControllerIT extends AbstractIntegrationTest {
                         .param("status",   "NEW")
                         .param("clientId", savedClient.getId().toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].status", is("NEW")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].status", is("NEW")));
     }
 
     @Test
