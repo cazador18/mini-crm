@@ -108,9 +108,12 @@ This repo is also a learning ground for Claude Code's extensibility, and has wor
 ## Known limitations (tracked, not fixed — see README.md for full detail)
 
 - No Spring Security — all `/api/**` endpoints are open; acceptable for this learning MVP, called out explicitly by `/security-check`.
-- `delete()` in the `*ServiceImpl` classes does a `findOrThrow()` then `deleteById()` as two separate calls (small unhandled race on concurrent deletes of the same id).
 - DTOs are hand-written classes with getters/setters rather than Java `record`s.
-- `DashboardServiceImpl.getStats()` issues 4 separate queries instead of one `GROUP BY` aggregate query.
+- Frontend pinned to Next.js 14.2.35 (latest patch in the 14.x line, not the true npm latest) —
+  `npm audit` still reports one high-severity advisory range (9.x–16.3.0-canary.5, DoS/cache-poisoning/XSS
+  in Next.js) whose fix requires the major jump to 16.x. Deliberately deferred: a 14→16 major upgrade
+  needs live browser verification (App Router/fetch-caching behavior changes) not available when this
+  was assessed. Revisit before any production use.
 
 ## Testing approach
 
