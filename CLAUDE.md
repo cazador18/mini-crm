@@ -25,10 +25,10 @@ cd backend && ./mvnw spring-boot:run
 cd backend && ./mvnw test
 
 # Backend — single test class
-cd backend && ./mvnw test -Dtest=ClientServiceTest
+cd backend && ./mvnw test -Dtest=ClientServiceImplTest
 
 # Backend — single test method
-cd backend && ./mvnw test -Dtest=ClientServiceTest#createClient_shouldReturnDto
+cd backend && ./mvnw test -Dtest=ClientServiceImplTest#createClient_shouldReturnDto
 
 # Frontend — local dev
 cd frontend && npm run dev
@@ -84,16 +84,33 @@ Controller → Service (interface + impl) → Repository → Entity
 
 - `Client`: id, name, email, phone, createdAt (Instant)
 - `Task`: id, title, description, status, priority, deadline (LocalDate), client (ManyToOne → Client)
+- `Note`: id, content, createdAt (Instant), client (ManyToOne → Client) — generated via the `/crud-generator` skill; use it as the reference example when adding a new entity of this shape
+- Dashboard: not an entity — `DashboardService`/`DashboardController` aggregate task counts by status for the `/` frontend page
 
-`Task.client` is `FetchType.LAZY` — always use DTOs in API responses to avoid lazy-loading issues.
+`Task.client` and `Note.client` are `FetchType.LAZY` — always use DTOs in API responses to avoid lazy-loading issues. Repositories expose `findAllByOrderByIdAsc(...)` instead of `findAll()` for deterministic ordering — follow this convention for any new entity.
 
 ## Current state
 
 Fully implemented MVP:
 
-- **Backend**: entities, DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, global exception handler, CORS config
+- **Backend**: entities (`Client`, `Task`, `Note`), DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, dashboard aggregation endpoint, global exception handler, CORS config
 - **Frontend**: dashboard (`/`), `/clients` (CRUD), `/tasks` (CRUD + filters by status/clientId)
-- **Tests**: unit tests (Mockito) for ClientServiceImpl + TaskServiceImpl; integration tests (Testcontainers PostgreSQL) for ClientController + TaskController
+- **Tests**: unit tests (Mockito) for `ClientServiceImpl`, `TaskServiceImpl`, `NoteServiceImpl`, `DashboardServiceImpl`; integration tests (MockMvc + Testcontainers PostgreSQL) for `ClientController`, `TaskController`, `DashboardController`
+
+## Claude Code project assets
+
+This repo is also a learning ground for Claude Code's extensibility, and has working examples of each checked in:
+
+- **Skill** — `.claude/skills/crud-generator/SKILL.md`: generates the full CRUD layer (entity, repository, request/response DTOs, service interface+impl, controller, not-found exception, unit test) for a new JPA entity, following the exact patterns of `Task`/`TaskServiceImpl`/etc. Use this instead of hand-writing a new entity's CRUD layer.
+- **Subagent** — `.claude/agents/code-reviewer.md`: architectural reviewer that checks files against four rules derived from this document (no business logic in controllers, service interface+impl pairing, entities never returned from services/controllers, constructor injection only).
+- **Slash command** — `.claude/commands/security-check.md`: backend security review across input validation, SQL injection, unauthenticated endpoints, CORS config, and stack-trace leakage.
+
+## Known limitations (tracked, not fixed — see README.md for full detail)
+
+- No Spring Security — all `/api/**` endpoints are open; acceptable for this learning MVP, called out explicitly by `/security-check`.
+- `delete()` in the `*ServiceImpl` classes does a `findOrThrow()` then `deleteById()` as two separate calls (small unhandled race on concurrent deletes of the same id).
+- DTOs are hand-written classes with getters/setters rather than Java `record`s.
+- `DashboardServiceImpl.getStats()` issues 4 separate queries instead of one `GROUP BY` aggregate query.
 
 ## Testing approach
 
