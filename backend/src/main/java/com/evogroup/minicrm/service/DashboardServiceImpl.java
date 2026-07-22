@@ -4,9 +4,11 @@ import com.evogroup.minicrm.dto.DashboardResponse;
 import com.evogroup.minicrm.model.TaskStatus;
 import com.evogroup.minicrm.repository.ClientRepository;
 import com.evogroup.minicrm.repository.TaskRepository;
+import com.evogroup.minicrm.repository.TaskStatusCount;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumMap;
 import java.util.Map;
 
 @Service
@@ -25,11 +27,16 @@ public class DashboardServiceImpl implements DashboardService {
     public DashboardResponse getStats() {
         DashboardResponse response = new DashboardResponse();
         response.setTotalClients(clientRepository.count());
-        response.setTasksByStatus(Map.of(
-                TaskStatus.NEW,         taskRepository.countByStatus(TaskStatus.NEW),
-                TaskStatus.IN_PROGRESS, taskRepository.countByStatus(TaskStatus.IN_PROGRESS),
-                TaskStatus.DONE,        taskRepository.countByStatus(TaskStatus.DONE)
-        ));
+
+        Map<TaskStatus, Long> counts = new EnumMap<>(TaskStatus.class);
+        for (TaskStatus status : TaskStatus.values()) {
+            counts.put(status, 0L);
+        }
+        for (TaskStatusCount row : taskRepository.countGroupedByStatus()) {
+            counts.put(row.getStatus(), row.getCount());
+        }
+        response.setTasksByStatus(counts);
+
         return response;
     }
 }
