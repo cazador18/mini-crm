@@ -80,6 +80,7 @@ class TaskControllerIT extends AbstractIntegrationTest {
     void createTask_unknownClientId_returns404() throws Exception {
         String body = objectMapper.writeValueAsString(Map.of(
                 "title", "Fix bug",
+                "status", "NEW",
                 "priority", "MEDIUM",
                 "clientId", 99999));
 
@@ -87,6 +88,32 @@ class TaskControllerIT extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void createTask_missingStatus_returns400() throws Exception {
+        String body = objectMapper.writeValueAsString(Map.of(
+                "title", "Fix bug",
+                "priority", "MEDIUM",
+                "clientId", savedClient.getId()));
+
+        mockMvc.perform(post("/api/tasks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createTask_missingPriority_returns400() throws Exception {
+        String body = objectMapper.writeValueAsString(Map.of(
+                "title", "Fix bug",
+                "status", "NEW",
+                "clientId", savedClient.getId()));
+
+        mockMvc.perform(post("/api/tasks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
