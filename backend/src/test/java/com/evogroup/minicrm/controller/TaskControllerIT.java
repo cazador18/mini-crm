@@ -210,4 +210,10 @@ class TaskControllerIT extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/tasks/{id}", created.getId()))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void deleteTask_notFound_returns404() throws Exception {
+        mockMvc.perform(delete("/api/tasks/99999"))
+                .andExpect(status().isNotFound());
+    }
 }

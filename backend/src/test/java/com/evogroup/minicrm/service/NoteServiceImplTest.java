@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.EmptyResultDataAccessException;
 
 import java.time.Instant;
 import java.util.List;
@@ -142,10 +143,16 @@ class NoteServiceImplTest {
 
     @Test
     void delete_callsDeleteById_whenExists() {
-        when(noteRepository.findById(10L)).thenReturn(Optional.of(note));
-
         service.delete(10L);
 
         verify(noteRepository).deleteById(10L);
+    }
+
+    @Test
+    void delete_throwsEmptyResult_whenMissing() {
+        doThrow(new EmptyResultDataAccessException(1)).when(noteRepository).deleteById(99L);
+
+        assertThatThrownBy(() -> service.delete(99L))
+                .isInstanceOf(EmptyResultDataAccessException.class);
     }
 }

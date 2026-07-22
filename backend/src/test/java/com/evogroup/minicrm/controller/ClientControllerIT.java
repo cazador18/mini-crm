@@ -126,4 +126,10 @@ class ClientControllerIT extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/clients/{id}", created.getId()))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void deleteClient_notFound_returns404() throws Exception {
+        mockMvc.perform(delete("/api/clients/99999"))
+                .andExpect(status().isNotFound());
+    }
 }

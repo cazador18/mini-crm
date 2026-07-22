@@ -16,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.EmptyResultDataAccessException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -181,10 +182,16 @@ class TaskServiceImplTest {
 
     @Test
     void delete_callsDeleteById_whenTaskExists() {
-        when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
-
         service.delete(10L);
 
         verify(taskRepository).deleteById(10L);
+    }
+
+    @Test
+    void delete_throwsEmptyResult_whenTaskMissing() {
+        doThrow(new EmptyResultDataAccessException(1)).when(taskRepository).deleteById(99L);
+
+        assertThatThrownBy(() -> service.delete(99L))
+                .isInstanceOf(EmptyResultDataAccessException.class);
     }
 }
