@@ -90,11 +90,15 @@ _TODO: ключевые замечания от `/review` и `/security-review`,
 
 | # | Ограничение | Риск | Что сделать перед production |
 |---|---|---|---|
-| ⚠️1 | Spring Security отсутствует — все `/api/**` эндпоинты открыты без аутентификации | Высокий | Добавить `spring-boot-starter-security`, настроить JWT или сессионную аутентификацию, ограничить `PUT`/`DELETE` ролью `ADMIN` |
-| ⚠️2 | `allowedHeaders("*")` в CORS; origin `http://localhost:3000` захардкожен | Низкий | Явно перечислить заголовки (`Content-Type`, `Authorization`); вынести origin в `application.yml` как `app.cors.allowed-origins` |
-| ⚠️3 | Frontend закреплён на Next.js 14.2.35 (последний патч в линии 14.x); `npm audit` фиксирует 1 high-severity уязвимость (DoS/cache poisoning/XSS, диапазон 9.x–16.3.0-canary.5), фикс которой требует мажорного апгрейда до 16.x | Средний | Мигрировать на Next.js 16 (App Router/fetch-caching изменения) с последующей ручной проверкой в браузере |
+| ⚠️1 | Frontend закреплён на Next.js 14.2.35 (последний патч в линии 14.x); `npm audit` фиксирует 1 high-severity уязвимость (DoS/cache poisoning/XSS, диапазон 9.x–16.3.0-canary.5), фикс которой требует мажорного апгрейда до 16.x | Средний | Мигрировать на Next.js 16 (App Router/fetch-caching изменения) с последующей ручной проверкой в браузере |
+| ⚠️2 | Дефолтный сид ADMIN (`admin`/`admin123`, `V4__seed_admin.sql`) — пароль публичен в репозитории; API для управления пользователями (создание/повышение до ADMIN/VIEWER) нет — только Flyway-сид и прямые вставки в БД | Высокий (если задеплоено как есть) | Сменить пароль admin сразу после первого логина; добавить эндпоинты управления пользователями с проверкой роли ADMIN |
 
-Предупреждение #3 из /security-check (`DataIntegrityViolationException`, `HttpMessageNotReadableException`) — **исправлено**: добавлены обработчики в `GlobalExceptionHandler`, возвращающие 409 / 400 с нейтральными сообщениями.
+Находки #1 (Spring Security отсутствовал) и #2 (`allowedHeaders("*")`, захардкоженный origin) —
+**исправлены**: #1 — Part B, B1 (JWT-аутентификация + Spring Security на всех `/api/**` кроме
+`/api/auth/**`); #2 — Part A v2, A7 (явные заголовки `Content-Type`/`Authorization`,
+origin вынесен в `app.cors.allowed-origins`). Предупреждение #3 из /security-check
+(`DataIntegrityViolationException`, `HttpMessageNotReadableException`) — тоже **исправлено**:
+добавлены обработчики в `GlobalExceptionHandler`, возвращающие 409 / 400 с нейтральными сообщениями.
 
 ### Технический долг (выявлено code review)
 

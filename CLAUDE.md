@@ -78,13 +78,15 @@ Controller → Service (interface + impl) → Repository → Entity
 - **Models** (`model/`): JPA entities — `Client`, `Task`, enums `TaskStatus` (NEW/IN_PROGRESS/DONE), `TaskPriority` (LOW/MEDIUM/HIGH).
 - **DTOs** (`dto/`): separate request/response objects. Entities stay in the service layer.
 - **Exceptions** (`exception/`): custom exceptions + `@ControllerAdvice` for global error handling.
-- **Config** (`config/`): CORS, OpenAPI/Swagger, and other Spring configuration.
+- **Config** (`config/`): CORS, Spring Security filter chain, and other Spring configuration.
+- **Security** (`security/`): JWT issuing/parsing, the JWT auth filter, `CustomUserDetailsService`, and REST-friendly 401/403 handlers (`RestAuthenticationEntryPoint`/`RestAccessDeniedHandler`).
 
 ## Domain model
 
 - `Client`: id, name, email, phone, createdAt (Instant)
 - `Task`: id, title, description, status, priority, deadline (LocalDate), client (ManyToOne → Client)
 - `Note`: id, content, createdAt (Instant), client (ManyToOne → Client) — generated via the `/crud-generator` skill; use it as the reference example when adding a new entity of this shape
+- `User`: id, username, email, passwordHash, role (`UserRole`: ADMIN/MANAGER/VIEWER), enabled — implements `UserDetails` directly (no separate principal wrapper class)
 - Dashboard: not an entity — `DashboardService`/`DashboardController` aggregate task counts by status for the `/` frontend page
 
 `Task.client` and `Note.client` are `FetchType.LAZY` — always use DTOs in API responses to avoid lazy-loading issues. Repositories expose `findAllByOrderByIdAsc(...)` instead of `findAll()` for deterministic ordering — follow this convention for any new entity.
@@ -93,9 +95,13 @@ Controller → Service (interface + impl) → Repository → Entity
 
 Fully implemented MVP:
 
-- **Backend**: entities (`Client`, `Task`, `Note`), DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, dashboard aggregation endpoint, global exception handler, CORS config
-- **Frontend**: dashboard (`/`), `/clients` (CRUD), `/tasks` (CRUD + filters by status/clientId)
-- **Tests**: unit tests (Mockito) for `ClientServiceImpl`, `TaskServiceImpl`, `NoteServiceImpl`, `DashboardServiceImpl`; integration tests (MockMvc + Testcontainers PostgreSQL) for `ClientController`, `TaskController`, `DashboardController`
+- **Backend**: entities (`Client`, `Task`, `Note`, `User`), DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, dashboard aggregation endpoint, global exception handler, CORS config, JWT auth (`POST /api/auth/register`/`login`, all other `/api/**` require a valid `Authorization: Bearer` token)
+- **Frontend**: `/login` (stores JWT in `localStorage`), dashboard (`/`), `/clients` (CRUD), `/tasks` (CRUD + filters by status/clientId) — these three live under the `(app)` route group so they share the sidebar layout that `/login` deliberately doesn't get
+- **Tests**: unit tests (Mockito) for `ClientServiceImpl`, `TaskServiceImpl`, `NoteServiceImpl`, `DashboardServiceImpl`, `AuthServiceImpl`, `JwtService`; integration tests (MockMvc + Testcontainers PostgreSQL) for `ClientController`, `TaskController`, `DashboardController`
+
+Bootstrap login for local/docker environments: `admin` / `admin123` (seeded by Flyway `V4__seed_admin.sql`,
+role ADMIN). Self-registration via `POST /api/auth/register` always creates role MANAGER — there is no
+API to create ADMIN/VIEWER accounts, only the Flyway seed and direct DB inserts (see Known limitations).
 
 ## Claude Code project assets
 
@@ -107,7 +113,9 @@ This repo is also a learning ground for Claude Code's extensibility, and has wor
 
 ## Known limitations (tracked, not fixed — see README.md for full detail)
 
-- No Spring Security — all `/api/**` endpoints are open; acceptable for this learning MVP, called out explicitly by `/security-check`.
+- Default seeded ADMIN credentials (`admin`/`admin123`, `V4__seed_admin.sql`) are public in this repo —
+  rotate immediately in any real deployment. There is no user-management API to create/promote
+  ADMIN or VIEWER accounts; self-register always yields MANAGER.
 - DTOs are hand-written classes with getters/setters rather than Java `record`s.
 - Frontend pinned to Next.js 14.2.35 (latest patch in the 14.x line, not the true npm latest) —
   `npm audit` still reports one high-severity advisory range (9.x–16.3.0-canary.5, DoS/cache-poisoning/XSS

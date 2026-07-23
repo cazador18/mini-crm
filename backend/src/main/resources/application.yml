@@ -8,6 +8,9 @@ spring:
 app:
   cors:
     allowed-origins: http://localhost:3000
+  jwt:
+    secret: ${JWT_SECRET:dev-only-insecure-secret-key-please-override-in-production-env}
+    expiration-ms: 86400000
 
 ---
 spring:

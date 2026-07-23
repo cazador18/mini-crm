@@ -1,10 +1,21 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...init,
   });
+  if (res.status === 401 && typeof window !== 'undefined') {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    localStorage.removeItem('role');
+    window.location.href = '/login';
+    throw new Error('401 Unauthorized');
+  }
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.status === 204 ? (undefined as T) : res.json();
 }
@@ -53,6 +64,12 @@ export type PageResponse<T> = {
   totalPages: number;
 };
 
+export type Role = 'ADMIN' | 'MANAGER' | 'VIEWER';
+
+export type LoginInput = { username: string; password: string };
+
+export type AuthResponse = { token: string; username: string; role: Role };
+
 // ── API functions ──────────────────────────────────────────────────────────
 
 export const clientsApi = {
@@ -83,4 +100,9 @@ export const tasksApi = {
 
 export const dashboardApi = {
   getStats: () => request<DashboardStats>('/api/dashboard'),
+};
+
+export const authApi = {
+  login: (data: LoginInput) =>
+    request<AuthResponse>('/api/auth/login', { method: 'POST', body: JSON.stringify(data) }),
 };
