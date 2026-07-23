@@ -5,6 +5,10 @@ spring:
   profiles:
     active: dev
 
+app:
+  cors:
+    allowed-origins: http://localhost:3000
+
 ---
 spring:
   config:

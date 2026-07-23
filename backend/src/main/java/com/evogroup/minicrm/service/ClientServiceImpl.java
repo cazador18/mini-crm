@@ -62,7 +62,7 @@ public class ClientServiceImpl implements ClientService {
     private Client findOrThrow(Long id) {
         return repository.findById(id)
                 .orElseThrow(() -> {
-                    log.error("Client not found: {}", id);
+                    log.warn("Client not found: {}", id);
                     return new ClientNotFoundException(id);
                 });
     }

@@ -77,7 +77,7 @@ public class TaskServiceImpl implements TaskService {
     private Task findOrThrow(Long id) {
         return taskRepository.findById(id)
                 .orElseThrow(() -> {
-                    log.error("Task not found: {}", id);
+                    log.warn("Task not found: {}", id);
                     return new TaskNotFoundException(id);
                 });
     }
@@ -85,7 +85,7 @@ public class TaskServiceImpl implements TaskService {
     private Client findClientOrThrow(Long clientId) {
         return clientRepository.findById(clientId)
                 .orElseThrow(() -> {
-                    log.error("Client not found: {}", clientId);
+                    log.warn("Client not found: {}", clientId);
                     return new ClientNotFoundException(clientId);
                 });
     }

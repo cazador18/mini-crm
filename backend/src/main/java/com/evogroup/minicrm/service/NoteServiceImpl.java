@@ -68,7 +68,7 @@ public class NoteServiceImpl implements NoteService {
     private Note findOrThrow(Long id) {
         return noteRepository.findById(id)
                 .orElseThrow(() -> {
-                    log.error("Note not found: {}", id);
+                    log.warn("Note not found: {}", id);
                     return new NoteNotFoundException(id);
                 });
     }
@@ -76,7 +76,7 @@ public class NoteServiceImpl implements NoteService {
     private Client findClientOrThrow(Long clientId) {
         return clientRepository.findById(clientId)
                 .orElseThrow(() -> {
-                    log.error("Client not found: {}", clientId);
+                    log.warn("Client not found: {}", clientId);
                     return new ClientNotFoundException(clientId);
                 });
     }
