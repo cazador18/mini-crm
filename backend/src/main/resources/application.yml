@@ -26,6 +26,8 @@ spring:
   h2:
     console:
       enabled: true
+  flyway:
+    enabled: false
 
 ---
 spring:
@@ -38,7 +40,7 @@ spring:
     password: ${DB_PASSWORD:minicrm}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
 
 ---
@@ -52,6 +54,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+  flyway:
+    enabled: false
 
 ---
 spring:
@@ -60,5 +64,5 @@ spring:
       on-profile: integration-test
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     show-sql: false
