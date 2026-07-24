@@ -15,14 +15,15 @@
 
 ---
 
-## Что генерируется (9 шагов)
+## Что генерируется (10 шагов)
 
-Для сущности `Xyz` создаётся 8 новых файлов + обновляется 1 существующий.
+Для сущности `Xyz` создаётся 9 новых файлов + обновляется 1 существующий.
 
 | # | Файл | Назначение |
 |---|---|---|
 | 1 | `model/Xyz.java` | JPA-entity |
 | 2 | `repository/XyzRepository.java` | Spring Data JPA |
+| 2.5 | `db/migration/Vn__add_xyzs.sql` | Flyway-миграция — таблица под сущность |
 | 3 | `dto/XyzRequest.java` | Входящий DTO (Bean Validation) |
 | 4 | `dto/XyzResponse.java` | Исходящий DTO |
 | 5 | `service/XyzService.java` | Интерфейс сервиса |
@@ -46,6 +47,9 @@
 - **Exception**: `backend/src/main/java/com/evogroup/minicrm/exception/TaskNotFoundException.java`
 - **Unit-тест**: `backend/src/test/java/com/evogroup/minicrm/service/TaskServiceImplTest.java`
 - **GlobalExceptionHandler**: `backend/src/main/java/com/evogroup/minicrm/exception/GlobalExceptionHandler.java`
+- **Migration**: `backend/src/main/resources/db/migration/` — посмотреть текущий самый старший
+  `Vn__*.sql`, чтобы знать следующий свободный номер (не гадать и не доверять номеру, который
+  мог быть указан в формулировке задачи)
 
 ---
 
@@ -89,6 +93,39 @@ public interface XyzRepository extends JpaRepository<Xyz, Long> {
 ```
 
 **Правило:** Никогда `findAll()` — всегда `findAllByOrderByIdAsc()` для детерминированного порядка.
+
+---
+
+### Шаг 2.5 — Flyway-миграция (`db/migration/Vn__add_xyzs.sql`)
+
+**Правило нумерации (важно, частый источник ошибок):** сначала посмотреть самый большой
+существующий `Vn__*.sql` в `backend/src/main/resources/db/migration/` (`ls` этой папки) и
+использовать следующий свободный номер. **Не доверять** номеру версии, который мог быть
+явно указан в формулировке задачи/тикета — если он не совпадает с тем, что реально следующее
+в папке, использовать реальный следующий номер, а не запрошенный.
+
+```sql
+CREATE TABLE xyzs (
+    id BIGSERIAL PRIMARY KEY,
+    -- остальные поля сущности, snake_case, NOT NULL там же, где @NotBlank/@NotNull в Request DTO
+    client_id BIGINT NOT NULL REFERENCES clients(id),   -- только если есть FK на Client
+    created_at TIMESTAMP NOT NULL DEFAULT now()          -- только если есть createdAt
+);
+
+CREATE INDEX idx_xyzs_client_id ON xyzs(client_id);      -- только если есть FK и findByClientId...
+```
+
+**Правила:**
+- Имя таблицы — snake_case, множественное число, совпадает с `@Table(name = "xyzs")` из Шага 1.
+- Колонки — snake_case (`client_id`, не `clientId`), типы соответствуют полям entity.
+- `NOT NULL` — ровно там, где в Entity/Request реально обязательность (не шире и не уже
+  Bean Validation из Шага 3).
+- FK — `REFERENCES <parent_table>(id)` + индекс на FK-колонке, если Repository (Шаг 2)
+  использует `findByClientId...`.
+- Эта миграция обязательна, даже если локальная разработка идёт на H2 с `ddl-auto: update`
+  (профили `dev`/`test`) — профили `docker`/`integration-test` работают строго через Flyway
+  (`ddl-auto: validate`), без неё схема там не создастся и Hibernate провалит валидацию
+  маппинга при старте.
 
 ---
 
@@ -284,8 +321,11 @@ class XyzServiceImplTest {
 
 ## Чеклист перед завершением
 
-- [ ] Все 8 файлов созданы в правильных пакетах
+- [ ] Все 9 файлов созданы в правильных пакетах
 - [ ] `GlobalExceptionHandler` обновлён
+- [ ] Номер Flyway-миграции проверен по факту (самый старший существующий `Vn__*.sql` + 1),
+      а не взят из формулировки задачи
+- [ ] Схема в `Vn__add_xyzs.sql` совпадает с Entity (типы, NOT NULL, FK, индексы)
 - [ ] `findAll()` нигде не используется — только `findAllByOrderByIdAsc()`
 - [ ] Entity никогда не возвращается из контроллера напрямую
 - [ ] `FetchType.LAZY` на всех `@ManyToOne`
