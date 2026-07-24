@@ -84,7 +84,7 @@ Controller → Service (interface + impl) → Repository → Entity
 - **DTOs** (`dto/`): separate request/response objects. Entities stay in the service layer.
 - **Exceptions** (`exception/`): custom exceptions + `@ControllerAdvice` for global error handling.
 - **Config** (`config/`): CORS, Spring Security filter chain, and other Spring configuration.
-- **Security** (`security/`): JWT issuing/parsing, the JWT auth filter, `CustomUserDetailsService`, REST-friendly 401/403 handlers (`RestAuthenticationEntryPoint`/`RestAccessDeniedHandler`), plus the RBAC helpers `CurrentUserService` (reads the authenticated `User` off `SecurityContextHolder` — inject this in services instead of calling `SecurityContextHolder` directly, it's what makes ownership logic mockable in `*ServiceImplTest`) and `OwnershipGuard` (`check(currentUser, client)` — throws `AccessDeniedException` when a MANAGER isn't the resource's owner; ADMIN/VIEWER always pass).
+- **Security** (`security/`): JWT issuing/parsing, the JWT auth filter, `CustomUserDetailsService`, REST-friendly 401/403 handlers (`RestAuthenticationEntryPoint`/`RestAccessDeniedHandler`), the RBAC helpers `CurrentUserService` (reads the authenticated `User` off `SecurityContextHolder` — inject this in services instead of calling `SecurityContextHolder` directly, it's what makes ownership logic mockable in `*ServiceImplTest`) and `OwnershipGuard` (`check(currentUser, client)` — throws `AccessDeniedException` when a MANAGER isn't the resource's owner; ADMIN/VIEWER always pass), and `RateLimitFilter` (Bucket4j, in-memory per-instance — see Rate limiting below).
 
 ## Domain model
 
@@ -116,6 +116,23 @@ Fully implemented MVP:
 Bootstrap login for local/docker environments: `admin` / `admin123` (seeded by Flyway `V4__seed_admin.sql`,
 role ADMIN). Self-registration via `POST /api/auth/register` always creates role MANAGER — there is no
 API to create ADMIN/VIEWER accounts, only the Flyway seed and direct DB inserts (see Known limitations).
+
+### Rate limiting
+
+`RateLimitFilter` (Bucket4j, `security/RateLimitFilter.java`) sits in the security filter chain
+before `JwtAuthenticationFilter` — a request that's already over budget shouldn't pay for JWT
+parsing. Two independent in-memory bucket maps, keyed per request:
+- `POST /api/auth/login` — 5/min, always by IP (no token exists yet at login time).
+- everything else under `/api/**` (including `/api/auth/register`) — 100/min, keyed by
+  `user:<username>` when the request carries a valid JWT, else `ip:<addr>`. The filter parses the
+  `Authorization` header itself via `JwtService` rather than reading `SecurityContextHolder`,
+  since it runs *before* `JwtAuthenticationFilter` populates it.
+Over the limit → `429` + `Retry-After` (seconds) + `{"error": "Too many requests"}`. Controlled by
+`app.rate-limit.enabled` (default `true`; `false` in `test`/`integration-test` — the shared
+Spring context in `AbstractIntegrationTest` means those login-helper calls would otherwise trip
+the limiter partway through an IT run). The bean is always created regardless of the flag — it
+just becomes a pass-through no-op when disabled — because `SecurityConfig` wires it
+unconditionally via constructor injection.
 
 ## Claude Code project assets
 

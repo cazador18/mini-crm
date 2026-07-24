@@ -11,6 +11,8 @@ app:
   jwt:
     secret: ${JWT_SECRET:dev-only-insecure-secret-key-please-override-in-production-env}
     expiration-ms: 86400000
+  rate-limit:
+    enabled: true
 
 ---
 spring:
@@ -60,6 +62,10 @@ spring:
   flyway:
     enabled: false
 
+app:
+  rate-limit:
+    enabled: false
+
 ---
 spring:
   config:
@@ -69,3 +75,7 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: false
+
+app:
+  rate-limit:
+    enabled: false
