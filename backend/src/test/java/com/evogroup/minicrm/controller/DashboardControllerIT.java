@@ -5,12 +5,12 @@ import com.evogroup.minicrm.model.Client;
 import com.evogroup.minicrm.model.Task;
 import com.evogroup.minicrm.model.TaskPriority;
 import com.evogroup.minicrm.model.TaskStatus;
+import com.evogroup.minicrm.model.User;
 import com.evogroup.minicrm.repository.ClientRepository;
 import com.evogroup.minicrm.repository.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -18,20 +18,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class DashboardControllerIT extends AbstractIntegrationTest {
 
-    @Autowired MockMvc mockMvc;
     @Autowired ClientRepository clientRepo;
     @Autowired TaskRepository   taskRepo;
 
+    private String adminToken;
+    private User admin;
+
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         taskRepo.deleteAll();
         clientRepo.deleteAll();
+        adminToken = adminToken();
+        admin = userRepository.findByUsername("admin").orElseThrow();
     }
 
     private Client saveClient(String name, String email) {
         Client c = new Client();
         c.setName(name);
         c.setEmail(email);
+        c.setOwner(admin);
         return clientRepo.save(c);
     }
 
@@ -54,7 +59,7 @@ class DashboardControllerIT extends AbstractIntegrationTest {
         saveTask("T3", TaskStatus.IN_PROGRESS, bob);
         saveTask("T4", TaskStatus.DONE,        bob);
 
-        mockMvc.perform(get("/api/dashboard"))
+        mockMvc.perform(get("/api/dashboard").header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalClients",              is(2)))
                 .andExpect(jsonPath("$.tasksByStatus.NEW",         is(2)))
@@ -64,11 +69,17 @@ class DashboardControllerIT extends AbstractIntegrationTest {
 
     @Test
     void getStats_withNoData_returnsZeroes() throws Exception {
-        mockMvc.perform(get("/api/dashboard"))
+        mockMvc.perform(get("/api/dashboard").header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalClients",              is(0)))
                 .andExpect(jsonPath("$.tasksByStatus.NEW",         is(0)))
                 .andExpect(jsonPath("$.tasksByStatus.IN_PROGRESS", is(0)))
                 .andExpect(jsonPath("$.tasksByStatus.DONE",        is(0)));
+    }
+
+    @Test
+    void getStats_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/api/dashboard"))
+                .andExpect(status().isUnauthorized());
     }
 }

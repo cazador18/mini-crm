@@ -8,4 +8,7 @@ import java.util.List;
 public interface NoteRepository extends JpaRepository<Note, Long> {
     List<Note> findAllByOrderByIdAsc();
     List<Note> findByClientIdOrderByIdAsc(Long clientId);
+
+    List<Note> findByClientOwnerIdOrderByIdAsc(Long ownerId);
+    List<Note> findByClientIdAndClientOwnerIdOrderByIdAsc(Long clientId, Long ownerId);
 }

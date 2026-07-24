@@ -9,18 +9,21 @@ import com.evogroup.minicrm.model.Client;
 import com.evogroup.minicrm.model.Task;
 import com.evogroup.minicrm.model.TaskPriority;
 import com.evogroup.minicrm.model.TaskStatus;
+import com.evogroup.minicrm.model.User;
+import com.evogroup.minicrm.model.UserRole;
 import com.evogroup.minicrm.repository.ClientRepository;
 import com.evogroup.minicrm.repository.TaskRepository;
+import com.evogroup.minicrm.security.CurrentUserService;
+import com.evogroup.minicrm.security.OwnershipGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -39,19 +42,39 @@ class TaskServiceImplTest {
     @Mock
     private ClientRepository clientRepository;
 
-    @InjectMocks
+    @Mock
+    private CurrentUserService currentUserService;
+
     private TaskServiceImpl service;
 
+    private User admin;
+    private User manager;
+    private User otherManager;
     private Client client;
     private Task task;
     private TaskRequest request;
 
     @BeforeEach
     void setUp() {
+        service = new TaskServiceImpl(taskRepository, clientRepository, currentUserService, new OwnershipGuard());
+
+        admin = new User();
+        admin.setId(100L);
+        admin.setRole(UserRole.ADMIN);
+
+        manager = new User();
+        manager.setId(1L);
+        manager.setRole(UserRole.MANAGER);
+
+        otherManager = new User();
+        otherManager.setId(2L);
+        otherManager.setRole(UserRole.MANAGER);
+
         client = new Client();
         client.setId(1L);
         client.setName("Alice");
         client.setEmail("alice@example.com");
+        client.setOwner(manager);
 
         task = new Task();
         task.setId(10L);
@@ -72,8 +95,9 @@ class TaskServiceImplTest {
     }
 
     @Test
-    void create_mapsRequestAndReturnsResponse() {
+    void create_mapsRequestAndReturnsResponse_whenOwner() {
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(currentUserService.getCurrentUser()).thenReturn(manager);
         when(taskRepository.save(any(Task.class))).thenReturn(task);
 
         TaskResponse response = service.create(request);
@@ -83,6 +107,17 @@ class TaskServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(TaskStatus.NEW);
         assertThat(response.getClientId()).isEqualTo(1L);
         verify(taskRepository).save(any(Task.class));
+    }
+
+    @Test
+    void create_throwsAccessDenied_whenManagerNotOwnerOfClient() {
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(currentUserService.getCurrentUser()).thenReturn(otherManager);
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(taskRepository, never()).save(any());
     }
 
     @Test
@@ -98,13 +133,23 @@ class TaskServiceImplTest {
     }
 
     @Test
-    void findById_returnsResponse_whenTaskExists() {
+    void findById_returnsResponse_whenOwner() {
         when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+        when(currentUserService.getCurrentUser()).thenReturn(manager);
 
         TaskResponse response = service.findById(10L);
 
         assertThat(response.getId()).isEqualTo(10L);
         assertThat(response.getTitle()).isEqualTo("Fix bug");
+    }
+
+    @Test
+    void findById_throwsAccessDenied_whenManagerNotOwner() {
+        when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+        when(currentUserService.getCurrentUser()).thenReturn(otherManager);
+
+        assertThatThrownBy(() -> service.findById(10L))
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -117,8 +162,9 @@ class TaskServiceImplTest {
     }
 
     @Test
-    void findAll_noFilter_returnsAll() {
+    void findAll_admin_noFilter_returnsAll() {
         Pageable pageable = PageRequest.of(0, 20);
+        when(currentUserService.getCurrentUser()).thenReturn(admin);
         when(taskRepository.findAllByOrderByIdAsc(pageable))
                 .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
 
@@ -130,8 +176,9 @@ class TaskServiceImplTest {
     }
 
     @Test
-    void findAll_byStatus_filtersCorrectly() {
+    void findAll_admin_byStatus_filtersCorrectly() {
         Pageable pageable = PageRequest.of(0, 20);
+        when(currentUserService.getCurrentUser()).thenReturn(admin);
         when(taskRepository.findByStatusOrderByIdAsc(TaskStatus.NEW, pageable))
                 .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
 
@@ -143,8 +190,9 @@ class TaskServiceImplTest {
     }
 
     @Test
-    void findAll_byClientId_filtersCorrectly() {
+    void findAll_admin_byClientId_filtersCorrectly() {
         Pageable pageable = PageRequest.of(0, 20);
+        when(currentUserService.getCurrentUser()).thenReturn(admin);
         when(taskRepository.findByClientIdOrderByIdAsc(1L, pageable))
                 .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
 
@@ -156,8 +204,9 @@ class TaskServiceImplTest {
     }
 
     @Test
-    void findAll_byStatusAndClientId_filtersCorrectly() {
+    void findAll_admin_byStatusAndClientId_filtersCorrectly() {
         Pageable pageable = PageRequest.of(0, 20);
+        when(currentUserService.getCurrentUser()).thenReturn(admin);
         when(taskRepository.findByStatusAndClientIdOrderByIdAsc(TaskStatus.NEW, 1L, pageable))
                 .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
 
@@ -168,7 +217,60 @@ class TaskServiceImplTest {
     }
 
     @Test
-    void update_updatesFieldsAndReturnsResponse() {
+    void findAll_manager_noFilter_scopedToOwnClients() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(currentUserService.getCurrentUser()).thenReturn(manager);
+        when(taskRepository.findByClientOwnerIdOrderByIdAsc(1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
+
+        PageResponse<TaskResponse> result = service.findAll(null, null, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(taskRepository).findByClientOwnerIdOrderByIdAsc(1L, pageable);
+        verify(taskRepository, never()).findAllByOrderByIdAsc(any());
+    }
+
+    @Test
+    void findAll_manager_byStatus_scopedToOwnClients() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(currentUserService.getCurrentUser()).thenReturn(manager);
+        when(taskRepository.findByStatusAndClientOwnerIdOrderByIdAsc(TaskStatus.NEW, 1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
+
+        PageResponse<TaskResponse> result = service.findAll(TaskStatus.NEW, null, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(taskRepository).findByStatusAndClientOwnerIdOrderByIdAsc(TaskStatus.NEW, 1L, pageable);
+    }
+
+    @Test
+    void findAll_manager_byClientId_scopedToOwnClients() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(currentUserService.getCurrentUser()).thenReturn(manager);
+        when(taskRepository.findByClientIdAndClientOwnerIdOrderByIdAsc(1L, 1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
+
+        PageResponse<TaskResponse> result = service.findAll(null, 1L, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(taskRepository).findByClientIdAndClientOwnerIdOrderByIdAsc(1L, 1L, pageable);
+    }
+
+    @Test
+    void findAll_manager_byStatusAndClientId_scopedToOwnClients() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(currentUserService.getCurrentUser()).thenReturn(manager);
+        when(taskRepository.findByStatusAndClientIdAndClientOwnerIdOrderByIdAsc(TaskStatus.NEW, 1L, 1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
+
+        PageResponse<TaskResponse> result = service.findAll(TaskStatus.NEW, 1L, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(taskRepository).findByStatusAndClientIdAndClientOwnerIdOrderByIdAsc(TaskStatus.NEW, 1L, 1L, pageable);
+    }
+
+    @Test
+    void update_updatesFieldsAndReturnsResponse_whenOwner() {
         TaskRequest updateRequest = new TaskRequest();
         updateRequest.setTitle("Fix bug v2");
         updateRequest.setStatus(TaskStatus.IN_PROGRESS);
@@ -184,6 +286,7 @@ class TaskServiceImplTest {
 
         when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(currentUserService.getCurrentUser()).thenReturn(manager);
         when(taskRepository.save(task)).thenReturn(updated);
 
         TaskResponse response = service.update(10L, updateRequest);
@@ -193,17 +296,45 @@ class TaskServiceImplTest {
     }
 
     @Test
-    void delete_callsDeleteById_whenTaskExists() {
-        service.delete(10L);
+    void update_throwsAccessDenied_whenManagerNotOwnerOfExistingTask() {
+        when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+        when(currentUserService.getCurrentUser()).thenReturn(otherManager);
 
-        verify(taskRepository).deleteById(10L);
+        assertThatThrownBy(() -> service.update(10L, request))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(taskRepository, never()).save(any());
     }
 
     @Test
-    void delete_throwsEmptyResult_whenTaskMissing() {
-        doThrow(new EmptyResultDataAccessException(1)).when(taskRepository).deleteById(99L);
+    void delete_deletesEntity_whenOwner() {
+        when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+        when(currentUserService.getCurrentUser()).thenReturn(manager);
+
+        service.delete(10L);
+
+        verify(taskRepository).delete(task);
+    }
+
+    @Test
+    void delete_throwsAccessDenied_whenManagerNotOwner() {
+        when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+        when(currentUserService.getCurrentUser()).thenReturn(otherManager);
+
+        assertThatThrownBy(() -> service.delete(10L))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(taskRepository, never()).delete(any());
+    }
+
+    @Test
+    void delete_throwsNotFound_whenTaskMissing() {
+        when(taskRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.delete(99L))
-                .isInstanceOf(EmptyResultDataAccessException.class);
+                .isInstanceOf(TaskNotFoundException.class)
+                .hasMessageContaining("99");
+
+        verify(taskRepository, never()).delete(any());
     }
 }

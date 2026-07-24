@@ -39,12 +39,17 @@ cd frontend && npm run lint
 
 ## Spring profiles
 
-| Profile            | Datasource | DDL          | When used                          |
-|--------------------|------------|--------------|------------------------------------|
-| `dev`              | H2 in-mem  | `update`     | Default for local run              |
-| `docker`           | PostgreSQL | `update`     | Docker Compose                     |
-| `test`             | H2 in-mem  | `create-drop`| `./mvnw test` (unit tests)         |
-| `integration-test` | PostgreSQL (Testcontainers) | `create-drop` | IT controller tests |
+| Profile            | Datasource | DDL          | Flyway | When used                          |
+|--------------------|------------|--------------|--------|-------------------------------------|
+| `dev`              | H2 in-mem  | `update`     | off    | Default for local run              |
+| `docker`           | PostgreSQL | `validate`   | on     | Docker Compose                     |
+| `test`             | H2 in-mem  | `create-drop`| off    | `./mvnw test` (unit tests)         |
+| `integration-test` | PostgreSQL (Testcontainers) | `validate` | on | IT controller tests, real Flyway migrations |
+
+`docker`/`integration-test` never auto-generate schema — they run the versioned migrations in
+`db/migration/` and `validate` only checks Hibernate's entity mappings match. `dev`/`test` stay on
+H2 with Hibernate-managed DDL for a fast local loop; Flyway is explicitly disabled there
+(`spring.flyway.enabled: false`) so the Postgres-flavored migration SQL never runs against H2.
 
 H2 console available at `http://localhost:8080/h2-console` when running with `dev` profile.
 
@@ -79,15 +84,24 @@ Controller → Service (interface + impl) → Repository → Entity
 - **DTOs** (`dto/`): separate request/response objects. Entities stay in the service layer.
 - **Exceptions** (`exception/`): custom exceptions + `@ControllerAdvice` for global error handling.
 - **Config** (`config/`): CORS, Spring Security filter chain, and other Spring configuration.
-- **Security** (`security/`): JWT issuing/parsing, the JWT auth filter, `CustomUserDetailsService`, and REST-friendly 401/403 handlers (`RestAuthenticationEntryPoint`/`RestAccessDeniedHandler`).
+- **Security** (`security/`): JWT issuing/parsing, the JWT auth filter, `CustomUserDetailsService`, REST-friendly 401/403 handlers (`RestAuthenticationEntryPoint`/`RestAccessDeniedHandler`), plus the RBAC helpers `CurrentUserService` (reads the authenticated `User` off `SecurityContextHolder` — inject this in services instead of calling `SecurityContextHolder` directly, it's what makes ownership logic mockable in `*ServiceImplTest`) and `OwnershipGuard` (`check(currentUser, client)` — throws `AccessDeniedException` when a MANAGER isn't the resource's owner; ADMIN/VIEWER always pass).
 
 ## Domain model
 
-- `Client`: id, name, email, phone, createdAt (Instant)
+- `Client`: id, name, email, phone, createdAt (Instant), owner (ManyToOne → User, set server-side to the
+  creating user — never accepted from the client in `ClientRequest`)
 - `Task`: id, title, description, status, priority, deadline (LocalDate), client (ManyToOne → Client)
 - `Note`: id, content, createdAt (Instant), client (ManyToOne → Client) — generated via the `/crud-generator` skill; use it as the reference example when adding a new entity of this shape
 - `User`: id, username, email, passwordHash, role (`UserRole`: ADMIN/MANAGER/VIEWER), enabled — implements `UserDetails` directly (no separate principal wrapper class)
 - Dashboard: not an entity — `DashboardService`/`DashboardController` aggregate task counts by status for the `/` frontend page
+
+**RBAC**: `Task`/`Note` have no owner of their own — visibility/ownership always traces through
+`.getClient().getOwner()`. MANAGER sees/mutates only clients (and their tasks/notes) they own;
+ADMIN and VIEWER see everything; VIEWER is blocked from all POST/PUT/DELETE via
+`@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")` on the controllers. `findById`/`update`/`delete`
+in the three `*ServiceImpl` classes always `findOrThrow` first (real 404 if the id doesn't exist
+at all) then `ownershipGuard.check(...)` (403 if it exists but isn't yours) — never conflate the
+two, the order matters for getting the right status code.
 
 `Task.client` and `Note.client` are `FetchType.LAZY` — always use DTOs in API responses to avoid lazy-loading issues. Repositories expose `findAllByOrderByIdAsc(...)` instead of `findAll()` for deterministic ordering — follow this convention for any new entity.
 
@@ -95,7 +109,7 @@ Controller → Service (interface + impl) → Repository → Entity
 
 Fully implemented MVP:
 
-- **Backend**: entities (`Client`, `Task`, `Note`, `User`), DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, dashboard aggregation endpoint, global exception handler, CORS config, JWT auth (`POST /api/auth/register`/`login`, all other `/api/**` require a valid `Authorization: Bearer` token)
+- **Backend**: entities (`Client`, `Task`, `Note`, `User`), DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, dashboard aggregation endpoint, global exception handler, CORS config, JWT auth (`POST /api/auth/register`/`login`, all other `/api/**` require a valid `Authorization: Bearer` token), RBAC (ADMIN/MANAGER/VIEWER, `Client.owner`-scoped visibility for MANAGER)
 - **Frontend**: `/login` (stores JWT in `localStorage`), dashboard (`/`), `/clients` (CRUD), `/tasks` (CRUD + filters by status/clientId) — these three live under the `(app)` route group so they share the sidebar layout that `/login` deliberately doesn't get
 - **Tests**: unit tests (Mockito) for `ClientServiceImpl`, `TaskServiceImpl`, `NoteServiceImpl`, `DashboardServiceImpl`, `AuthServiceImpl`, `JwtService`; integration tests (MockMvc + Testcontainers PostgreSQL) for `ClientController`, `TaskController`, `DashboardController`
 

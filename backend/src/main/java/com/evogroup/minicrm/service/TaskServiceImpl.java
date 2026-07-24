@@ -8,8 +8,12 @@ import com.evogroup.minicrm.exception.TaskNotFoundException;
 import com.evogroup.minicrm.model.Client;
 import com.evogroup.minicrm.model.Task;
 import com.evogroup.minicrm.model.TaskStatus;
+import com.evogroup.minicrm.model.User;
+import com.evogroup.minicrm.model.UserRole;
 import com.evogroup.minicrm.repository.ClientRepository;
 import com.evogroup.minicrm.repository.TaskRepository;
+import com.evogroup.minicrm.security.CurrentUserService;
+import com.evogroup.minicrm.security.OwnershipGuard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -25,15 +29,23 @@ public class TaskServiceImpl implements TaskService {
 
     private final TaskRepository taskRepository;
     private final ClientRepository clientRepository;
+    private final CurrentUserService currentUserService;
+    private final OwnershipGuard ownershipGuard;
 
-    public TaskServiceImpl(TaskRepository taskRepository, ClientRepository clientRepository) {
+    public TaskServiceImpl(TaskRepository taskRepository,
+                            ClientRepository clientRepository,
+                            CurrentUserService currentUserService,
+                            OwnershipGuard ownershipGuard) {
         this.taskRepository = taskRepository;
         this.clientRepository = clientRepository;
+        this.currentUserService = currentUserService;
+        this.ownershipGuard = ownershipGuard;
     }
 
     @Override
     public TaskResponse create(TaskRequest request) {
         Client client = findClientOrThrow(request.getClientId());
+        ownershipGuard.check(currentUserService.getCurrentUser(), client);
         Task task = new Task();
         mapRequestToTask(request, task, client);
         return toResponse(taskRepository.save(task));
@@ -42,36 +54,58 @@ public class TaskServiceImpl implements TaskService {
     @Override
     @Transactional(readOnly = true)
     public TaskResponse findById(Long id) {
-        return toResponse(findOrThrow(id));
+        Task task = findOrThrow(id);
+        ownershipGuard.check(currentUserService.getCurrentUser(), task.getClient());
+        return toResponse(task);
     }
 
     @Override
     @Transactional(readOnly = true)
     public PageResponse<TaskResponse> findAll(TaskStatus status, Long clientId, Pageable pageable) {
+        User currentUser = currentUserService.getCurrentUser();
         Page<Task> tasks;
-        if (status != null && clientId != null) {
-            tasks = taskRepository.findByStatusAndClientIdOrderByIdAsc(status, clientId, pageable);
-        } else if (status != null) {
-            tasks = taskRepository.findByStatusOrderByIdAsc(status, pageable);
-        } else if (clientId != null) {
-            tasks = taskRepository.findByClientIdOrderByIdAsc(clientId, pageable);
+        if (currentUser.getRole() == UserRole.MANAGER) {
+            Long ownerId = currentUser.getId();
+            if (status != null && clientId != null) {
+                tasks = taskRepository.findByStatusAndClientIdAndClientOwnerIdOrderByIdAsc(
+                        status, clientId, ownerId, pageable);
+            } else if (status != null) {
+                tasks = taskRepository.findByStatusAndClientOwnerIdOrderByIdAsc(status, ownerId, pageable);
+            } else if (clientId != null) {
+                tasks = taskRepository.findByClientIdAndClientOwnerIdOrderByIdAsc(clientId, ownerId, pageable);
+            } else {
+                tasks = taskRepository.findByClientOwnerIdOrderByIdAsc(ownerId, pageable);
+            }
         } else {
-            tasks = taskRepository.findAllByOrderByIdAsc(pageable);
+            if (status != null && clientId != null) {
+                tasks = taskRepository.findByStatusAndClientIdOrderByIdAsc(status, clientId, pageable);
+            } else if (status != null) {
+                tasks = taskRepository.findByStatusOrderByIdAsc(status, pageable);
+            } else if (clientId != null) {
+                tasks = taskRepository.findByClientIdOrderByIdAsc(clientId, pageable);
+            } else {
+                tasks = taskRepository.findAllByOrderByIdAsc(pageable);
+            }
         }
         return PageResponse.of(tasks.map(this::toResponse));
     }
 
     @Override
     public TaskResponse update(Long id, TaskRequest request) {
+        User currentUser = currentUserService.getCurrentUser();
         Task task = findOrThrow(id);
+        ownershipGuard.check(currentUser, task.getClient());
         Client client = findClientOrThrow(request.getClientId());
+        ownershipGuard.check(currentUser, client);
         mapRequestToTask(request, task, client);
         return toResponse(taskRepository.save(task));
     }
 
     @Override
     public void delete(Long id) {
-        taskRepository.deleteById(id);
+        Task task = findOrThrow(id);
+        ownershipGuard.check(currentUserService.getCurrentUser(), task.getClient());
+        taskRepository.delete(task);
     }
 
     private Task findOrThrow(Long id) {

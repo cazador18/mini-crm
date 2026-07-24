@@ -5,7 +5,11 @@ import com.evogroup.minicrm.dto.ClientResponse;
 import com.evogroup.minicrm.dto.PageResponse;
 import com.evogroup.minicrm.exception.ClientNotFoundException;
 import com.evogroup.minicrm.model.Client;
+import com.evogroup.minicrm.model.User;
+import com.evogroup.minicrm.model.UserRole;
 import com.evogroup.minicrm.repository.ClientRepository;
+import com.evogroup.minicrm.security.CurrentUserService;
+import com.evogroup.minicrm.security.OwnershipGuard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
@@ -19,9 +23,15 @@ public class ClientServiceImpl implements ClientService {
     private static final Logger log = LoggerFactory.getLogger(ClientServiceImpl.class);
 
     private final ClientRepository repository;
+    private final CurrentUserService currentUserService;
+    private final OwnershipGuard ownershipGuard;
 
-    public ClientServiceImpl(ClientRepository repository) {
+    public ClientServiceImpl(ClientRepository repository,
+                              CurrentUserService currentUserService,
+                              OwnershipGuard ownershipGuard) {
         this.repository = repository;
+        this.currentUserService = currentUserService;
+        this.ownershipGuard = ownershipGuard;
     }
 
     @Override
@@ -30,24 +40,33 @@ public class ClientServiceImpl implements ClientService {
         client.setName(request.getName());
         client.setEmail(request.getEmail());
         client.setPhone(request.getPhone());
+        client.setOwner(currentUserService.getCurrentUser());
         return toResponse(repository.save(client));
     }
 
     @Override
     @Transactional(readOnly = true)
     public ClientResponse findById(Long id) {
-        return toResponse(findOrThrow(id));
+        Client client = findOrThrow(id);
+        ownershipGuard.check(currentUserService.getCurrentUser(), client);
+        return toResponse(client);
     }
 
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ClientResponse> findAll(Pageable pageable) {
+        User currentUser = currentUserService.getCurrentUser();
+        if (currentUser.getRole() == UserRole.MANAGER) {
+            return PageResponse.of(
+                    repository.findByOwnerIdOrderByIdAsc(currentUser.getId(), pageable).map(this::toResponse));
+        }
         return PageResponse.of(repository.findAllByOrderByIdAsc(pageable).map(this::toResponse));
     }
 
     @Override
     public ClientResponse update(Long id, ClientRequest request) {
         Client client = findOrThrow(id);
+        ownershipGuard.check(currentUserService.getCurrentUser(), client);
         client.setName(request.getName());
         client.setEmail(request.getEmail());
         client.setPhone(request.getPhone());
@@ -56,7 +75,9 @@ public class ClientServiceImpl implements ClientService {
 
     @Override
     public void delete(Long id) {
-        repository.deleteById(id);
+        Client client = findOrThrow(id);
+        ownershipGuard.check(currentUserService.getCurrentUser(), client);
+        repository.delete(client);
     }
 
     private Client findOrThrow(Long id) {
@@ -74,6 +95,7 @@ public class ClientServiceImpl implements ClientService {
         response.setEmail(client.getEmail());
         response.setPhone(client.getPhone());
         response.setCreatedAt(client.getCreatedAt());
+        response.setOwnerId(client.getOwner().getId());
         return response;
     }
 }

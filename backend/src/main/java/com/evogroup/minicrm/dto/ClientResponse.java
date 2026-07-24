@@ -9,6 +9,7 @@ public class ClientResponse {
     private String email;
     private String phone;
     private Instant createdAt;
+    private Long ownerId;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -24,4 +25,7 @@ public class ClientResponse {
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    public Long getOwnerId() { return ownerId; }
+    public void setOwnerId(Long ownerId) { this.ownerId = ownerId; }
 }

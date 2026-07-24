@@ -15,6 +15,12 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     Page<Task> findByClientIdOrderByIdAsc(Long clientId, Pageable pageable);
     Page<Task> findByStatusAndClientIdOrderByIdAsc(TaskStatus status, Long clientId, Pageable pageable);
 
+    Page<Task> findByClientOwnerIdOrderByIdAsc(Long ownerId, Pageable pageable);
+    Page<Task> findByStatusAndClientOwnerIdOrderByIdAsc(TaskStatus status, Long ownerId, Pageable pageable);
+    Page<Task> findByClientIdAndClientOwnerIdOrderByIdAsc(Long clientId, Long ownerId, Pageable pageable);
+    Page<Task> findByStatusAndClientIdAndClientOwnerIdOrderByIdAsc(
+            TaskStatus status, Long clientId, Long ownerId, Pageable pageable);
+
     @Query("select t.status as status, count(t) as count from Task t group by t.status")
     List<TaskStatusCount> countGroupedByStatus();
 }
