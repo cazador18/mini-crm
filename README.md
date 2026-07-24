@@ -8,7 +8,13 @@ Java 21 + Spring Boot 3 · PostgreSQL · Next.js + TypeScript · Docker Compose
 
 ## Запуск
 
+Перед первым запуском скопируй `.env.example` в `.env` и заполни секреты (в первую очередь
+`JWT_SECRET` — минимум 32 случайных символа; без него `docker compose up` откажется
+стартовать backend):
+
 ```bash
+cp .env.example .env
+# отредактировать .env — задать реальный JWT_SECRET
 docker compose up --build
 ```
 
@@ -166,10 +172,16 @@ origin вынесен в `app.cors.allowed-origins`). Предупреждени
 **исправлены** (см. Part A v2: A2 — атомарный `delete()` + маппинг `EmptyResultDataAccessException`
 в `GlobalExceptionHandler`; A4 — единый `@Query` с `GROUP BY`).
 
-> **Открытый пункт:** код Part B (B1–B4 — JWT-аутентификация, RBAC/ownership, rate limiting,
-> status-transition правила, audit log) ещё не прогонялся ни через `/review`, ни через субагент
-> `code-reviewer`, ни через `/security-check` — эти таблицы отражают только MVP-слой (Part A v2).
-> Применение `code-reviewer` к B1–B4 запланировано отдельным шагом.
+> **Part E — код B1–B4 проверен:** субагент `code-reviewer` (JwtService, RateLimitFilter,
+> AuditServiceImpl, AuthController, TaskServiceImpl/status-transition-правила) — нарушений P1–P4
+> не найдено. `/security-check` на всём security-слое B1–B4 нашёл 1 критичную находку —
+> захардкоженный дефолтный `JWT_SECRET` в `application.yml` подхватывался и в `docker`-профиле
+> (в `docker-compose.yml` переменная не пробрасывалась), то есть любой, кто видел этот
+> публичный репозиторий, мог подделать валидный JWT для любой роли, включая ADMIN, без пароля.
+> **Исправлено**: дефолт убран из общего блока `application.yml`, `docker`-профиль теперь
+> обязан получить `JWT_SECRET` через переменную окружения (`docker-compose.yml` + `.env`,
+> см. `## Запуск`); `dev`/`test`/`integration-test` сохранили свои безопасные
+> дефолты-заглушки, чтобы `./mvnw spring-boot:run`/`./mvnw test` продолжали работать без `.env`.
 
 <img width="1438" height="737" alt="image" src="https://github.com/user-attachments/assets/ad438edd-15d7-4e91-b596-d8f6649ff4be" />
 <img width="1429" height="503" alt="image" src="https://github.com/user-attachments/assets/1343bc63-1d00-4dbb-b909-b130bc790615" />
