@@ -38,6 +38,9 @@ class ClientServiceImplTest {
     @Mock
     private CurrentUserService currentUserService;
 
+    @Mock
+    private AuditService auditService;
+
     private ClientServiceImpl service;
 
     private User admin;
@@ -48,7 +51,7 @@ class ClientServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new ClientServiceImpl(repository, currentUserService, new OwnershipGuard());
+        service = new ClientServiceImpl(repository, currentUserService, new OwnershipGuard(), auditService);
 
         admin = new User();
         admin.setId(100L);
@@ -90,6 +93,16 @@ class ClientServiceImplTest {
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getName()).isEqualTo("Alice");
         assertThat(response.getOwnerId()).isEqualTo(1L);
+    }
+
+    @Test
+    void create_logsAuditEntry() {
+        when(currentUserService.getCurrentUser()).thenReturn(manager);
+        when(repository.save(any(Client.class))).thenReturn(client);
+
+        service.create(request);
+
+        verify(auditService).log("CREATE", "CLIENT", 1L);
     }
 
     @Test
@@ -190,6 +203,7 @@ class ClientServiceImplTest {
 
         assertThat(response.getName()).isEqualTo("Alice Updated");
         assertThat(response.getEmail()).isEqualTo("new@example.com");
+        verify(auditService).log("UPDATE", "CLIENT", 1L);
     }
 
     @Test
@@ -222,6 +236,7 @@ class ClientServiceImplTest {
         service.delete(1L);
 
         verify(repository).delete(client);
+        verify(auditService).log("DELETE", "CLIENT", 1L);
     }
 
     @Test

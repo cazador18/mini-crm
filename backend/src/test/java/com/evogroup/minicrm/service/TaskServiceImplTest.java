@@ -4,6 +4,7 @@ import com.evogroup.minicrm.dto.PageResponse;
 import com.evogroup.minicrm.dto.TaskRequest;
 import com.evogroup.minicrm.dto.TaskResponse;
 import com.evogroup.minicrm.exception.ClientNotFoundException;
+import com.evogroup.minicrm.exception.InvalidTaskStatusTransitionException;
 import com.evogroup.minicrm.exception.TaskNotFoundException;
 import com.evogroup.minicrm.model.Client;
 import com.evogroup.minicrm.model.Task;
@@ -31,6 +32,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +47,9 @@ class TaskServiceImplTest {
     @Mock
     private CurrentUserService currentUserService;
 
+    @Mock
+    private AuditService auditService;
+
     private TaskServiceImpl service;
 
     private User admin;
@@ -56,7 +61,7 @@ class TaskServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new TaskServiceImpl(taskRepository, clientRepository, currentUserService, new OwnershipGuard());
+        service = new TaskServiceImpl(taskRepository, clientRepository, currentUserService, new OwnershipGuard(), auditService);
 
         admin = new User();
         admin.setId(100L);
@@ -107,6 +112,7 @@ class TaskServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(TaskStatus.NEW);
         assertThat(response.getClientId()).isEqualTo(1L);
         verify(taskRepository).save(any(Task.class));
+        verify(auditService).log("CREATE", "TASK", 10L);
     }
 
     @Test
@@ -293,6 +299,7 @@ class TaskServiceImplTest {
 
         assertThat(response.getTitle()).isEqualTo("Fix bug v2");
         assertThat(response.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
+        verify(auditService).log("STATUS_CHANGE", "TASK", 10L);
     }
 
     @Test
@@ -314,6 +321,7 @@ class TaskServiceImplTest {
         service.delete(10L);
 
         verify(taskRepository).delete(task);
+        verify(auditService).log("DELETE", "TASK", 10L);
     }
 
     @Test
@@ -336,5 +344,129 @@ class TaskServiceImplTest {
                 .hasMessageContaining("99");
 
         verify(taskRepository, never()).delete(any());
+    }
+
+    // ── status transition rules ─────────────────────────────────────────────
+
+    private Task taskWithStatus(TaskStatus status) {
+        Task t = new Task();
+        t.setId(10L);
+        t.setTitle("Fix bug");
+        t.setStatus(status);
+        t.setPriority(TaskPriority.HIGH);
+        t.setClient(client);
+        return t;
+    }
+
+    private TaskRequest requestWithStatus(TaskStatus status) {
+        TaskRequest r = new TaskRequest();
+        r.setTitle("Fix bug");
+        r.setStatus(status);
+        r.setPriority(TaskPriority.HIGH);
+        r.setClientId(1L);
+        return r;
+    }
+
+    private void stubForUpdate(Task existing, User actingUser) {
+        when(taskRepository.findById(10L)).thenReturn(Optional.of(existing));
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(currentUserService.getCurrentUser()).thenReturn(actingUser);
+    }
+
+    @Test
+    void update_newToInProgress_succeeds() {
+        Task existing = taskWithStatus(TaskStatus.NEW);
+        TaskRequest req = requestWithStatus(TaskStatus.IN_PROGRESS);
+        stubForUpdate(existing, manager);
+        when(taskRepository.save(existing)).thenReturn(existing);
+
+        TaskResponse response = service.update(10L, req);
+
+        assertThat(response.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
+        verify(auditService).log("STATUS_CHANGE", "TASK", 10L);
+    }
+
+    @Test
+    void update_inProgressToDone_succeeds() {
+        Task existing = taskWithStatus(TaskStatus.IN_PROGRESS);
+        TaskRequest req = requestWithStatus(TaskStatus.DONE);
+        stubForUpdate(existing, manager);
+        when(taskRepository.save(existing)).thenReturn(existing);
+
+        TaskResponse response = service.update(10L, req);
+
+        assertThat(response.getStatus()).isEqualTo(TaskStatus.DONE);
+        verify(auditService).log("STATUS_CHANGE", "TASK", 10L);
+    }
+
+    @Test
+    void update_doneToInProgress_asAdmin_succeeds() {
+        Task existing = taskWithStatus(TaskStatus.DONE);
+        TaskRequest req = requestWithStatus(TaskStatus.IN_PROGRESS);
+        stubForUpdate(existing, admin);
+        when(taskRepository.save(existing)).thenReturn(existing);
+
+        TaskResponse response = service.update(10L, req);
+
+        assertThat(response.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void update_doneToInProgress_asManager_throwsConflict() {
+        Task existing = taskWithStatus(TaskStatus.DONE);
+        TaskRequest req = requestWithStatus(TaskStatus.IN_PROGRESS);
+        stubForUpdate(existing, manager);
+
+        assertThatThrownBy(() -> service.update(10L, req))
+                .isInstanceOf(InvalidTaskStatusTransitionException.class);
+
+        verify(taskRepository, never()).save(any());
+        verify(auditService, never()).log(any(), any(), any());
+    }
+
+    @Test
+    void update_newToDone_throwsConflict_evenForAdmin() {
+        Task existing = taskWithStatus(TaskStatus.NEW);
+        TaskRequest req = requestWithStatus(TaskStatus.DONE);
+        stubForUpdate(existing, admin);
+
+        assertThatThrownBy(() -> service.update(10L, req))
+                .isInstanceOf(InvalidTaskStatusTransitionException.class);
+
+        verify(taskRepository, never()).save(any());
+    }
+
+    @Test
+    void update_inProgressToNew_throwsConflict() {
+        Task existing = taskWithStatus(TaskStatus.IN_PROGRESS);
+        TaskRequest req = requestWithStatus(TaskStatus.NEW);
+        stubForUpdate(existing, admin);
+
+        assertThatThrownBy(() -> service.update(10L, req))
+                .isInstanceOf(InvalidTaskStatusTransitionException.class);
+    }
+
+    @Test
+    void update_doneToNew_throwsConflict() {
+        Task existing = taskWithStatus(TaskStatus.DONE);
+        TaskRequest req = requestWithStatus(TaskStatus.NEW);
+        stubForUpdate(existing, admin);
+
+        assertThatThrownBy(() -> service.update(10L, req))
+                .isInstanceOf(InvalidTaskStatusTransitionException.class);
+    }
+
+    @Test
+    void update_sameStatus_isNoOp_succeeds() {
+        Task existing = taskWithStatus(TaskStatus.NEW);
+        TaskRequest req = requestWithStatus(TaskStatus.NEW);
+        stubForUpdate(existing, manager);
+        when(taskRepository.save(existing)).thenReturn(existing);
+
+        TaskResponse response = service.update(10L, req);
+
+        assertThat(response.getStatus()).isEqualTo(TaskStatus.NEW);
+        verify(auditService).log("UPDATE", "TASK", 10L);
+        verify(auditService, never()).log(eq("STATUS_CHANGE"), any(), any());
     }
 }

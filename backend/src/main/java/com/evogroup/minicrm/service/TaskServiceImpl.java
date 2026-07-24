@@ -4,6 +4,7 @@ import com.evogroup.minicrm.dto.PageResponse;
 import com.evogroup.minicrm.dto.TaskRequest;
 import com.evogroup.minicrm.dto.TaskResponse;
 import com.evogroup.minicrm.exception.ClientNotFoundException;
+import com.evogroup.minicrm.exception.InvalidTaskStatusTransitionException;
 import com.evogroup.minicrm.exception.TaskNotFoundException;
 import com.evogroup.minicrm.model.Client;
 import com.evogroup.minicrm.model.Task;
@@ -31,15 +32,18 @@ public class TaskServiceImpl implements TaskService {
     private final ClientRepository clientRepository;
     private final CurrentUserService currentUserService;
     private final OwnershipGuard ownershipGuard;
+    private final AuditService auditService;
 
     public TaskServiceImpl(TaskRepository taskRepository,
                             ClientRepository clientRepository,
                             CurrentUserService currentUserService,
-                            OwnershipGuard ownershipGuard) {
+                            OwnershipGuard ownershipGuard,
+                            AuditService auditService) {
         this.taskRepository = taskRepository;
         this.clientRepository = clientRepository;
         this.currentUserService = currentUserService;
         this.ownershipGuard = ownershipGuard;
+        this.auditService = auditService;
     }
 
     @Override
@@ -48,7 +52,9 @@ public class TaskServiceImpl implements TaskService {
         ownershipGuard.check(currentUserService.getCurrentUser(), client);
         Task task = new Task();
         mapRequestToTask(request, task, client);
-        return toResponse(taskRepository.save(task));
+        Task saved = taskRepository.save(task);
+        auditService.log("CREATE", "TASK", saved.getId());
+        return toResponse(saved);
     }
 
     @Override
@@ -97,8 +103,20 @@ public class TaskServiceImpl implements TaskService {
         ownershipGuard.check(currentUser, task.getClient());
         Client client = findClientOrThrow(request.getClientId());
         ownershipGuard.check(currentUser, client);
+
+        TaskStatus previousStatus = task.getStatus();
+        validateStatusTransition(previousStatus, request.getStatus(), currentUser);
+
         mapRequestToTask(request, task, client);
-        return toResponse(taskRepository.save(task));
+        Task saved = taskRepository.save(task);
+
+        if (previousStatus != saved.getStatus()) {
+            auditService.log("STATUS_CHANGE", "TASK", saved.getId());
+        } else {
+            auditService.log("UPDATE", "TASK", saved.getId());
+        }
+
+        return toResponse(saved);
     }
 
     @Override
@@ -106,6 +124,20 @@ public class TaskServiceImpl implements TaskService {
         Task task = findOrThrow(id);
         ownershipGuard.check(currentUserService.getCurrentUser(), task.getClient());
         taskRepository.delete(task);
+        auditService.log("DELETE", "TASK", id);
+    }
+
+    private void validateStatusTransition(TaskStatus from, TaskStatus to, User currentUser) {
+        if (from == to) {
+            return;
+        }
+        boolean forward = (from == TaskStatus.NEW && to == TaskStatus.IN_PROGRESS)
+                || (from == TaskStatus.IN_PROGRESS && to == TaskStatus.DONE);
+        boolean adminReopen = from == TaskStatus.DONE && to == TaskStatus.IN_PROGRESS
+                && currentUser.getRole() == UserRole.ADMIN;
+        if (!forward && !adminReopen) {
+            throw new InvalidTaskStatusTransitionException(from, to);
+        }
     }
 
     private Task findOrThrow(Long id) {

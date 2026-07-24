@@ -25,13 +25,16 @@ public class ClientServiceImpl implements ClientService {
     private final ClientRepository repository;
     private final CurrentUserService currentUserService;
     private final OwnershipGuard ownershipGuard;
+    private final AuditService auditService;
 
     public ClientServiceImpl(ClientRepository repository,
                               CurrentUserService currentUserService,
-                              OwnershipGuard ownershipGuard) {
+                              OwnershipGuard ownershipGuard,
+                              AuditService auditService) {
         this.repository = repository;
         this.currentUserService = currentUserService;
         this.ownershipGuard = ownershipGuard;
+        this.auditService = auditService;
     }
 
     @Override
@@ -41,7 +44,9 @@ public class ClientServiceImpl implements ClientService {
         client.setEmail(request.getEmail());
         client.setPhone(request.getPhone());
         client.setOwner(currentUserService.getCurrentUser());
-        return toResponse(repository.save(client));
+        Client saved = repository.save(client);
+        auditService.log("CREATE", "CLIENT", saved.getId());
+        return toResponse(saved);
     }
 
     @Override
@@ -70,7 +75,9 @@ public class ClientServiceImpl implements ClientService {
         client.setName(request.getName());
         client.setEmail(request.getEmail());
         client.setPhone(request.getPhone());
-        return toResponse(repository.save(client));
+        Client saved = repository.save(client);
+        auditService.log("UPDATE", "CLIENT", saved.getId());
+        return toResponse(saved);
     }
 
     @Override
@@ -78,6 +85,7 @@ public class ClientServiceImpl implements ClientService {
         Client client = findOrThrow(id);
         ownershipGuard.check(currentUserService.getCurrentUser(), client);
         repository.delete(client);
+        auditService.log("DELETE", "CLIENT", id);
     }
 
     private Client findOrThrow(Long id) {

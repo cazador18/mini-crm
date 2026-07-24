@@ -336,4 +336,55 @@ class TaskControllerIT extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + otherManagerToken))
                 .andExpect(status().isForbidden());
     }
+
+    // ── status transition rules ─────────────────────────────────────────────
+
+    private void updateTaskStatusViaApi(Long taskId, String status, String token, int expectedStatus) throws Exception {
+        String body = objectMapper.writeValueAsString(Map.of(
+                "title", "Fix bug",
+                "status", status,
+                "priority", "HIGH",
+                "clientId", savedClient.getId()));
+
+        mockMvc.perform(put("/api/tasks/{id}", taskId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().is(expectedStatus));
+    }
+
+    @Test
+    void updateTask_skipToDone_returns409() throws Exception {
+        TaskResponse created = createTaskViaApi("Fix bug", "NEW", savedClient.getId(), adminToken);
+
+        updateTaskStatusViaApi(created.getId(), "DONE", adminToken, 409);
+    }
+
+    @Test
+    void updateTask_reopenDone_asAdmin_returns200() throws Exception {
+        TaskResponse created = createTaskViaApi("Fix bug", "NEW", savedClient.getId(), adminToken);
+        updateTaskStatusViaApi(created.getId(), "IN_PROGRESS", adminToken, 200);
+        updateTaskStatusViaApi(created.getId(), "DONE", adminToken, 200);
+
+        updateTaskStatusViaApi(created.getId(), "IN_PROGRESS", adminToken, 200);
+    }
+
+    @Test
+    void updateTask_reopenDone_asManager_returns409() throws Exception {
+        String managerToken = registerManagerAndLogin();
+        String clientBody = objectMapper.writeValueAsString(Map.of("name", "M-Client", "email", "m@example.com"));
+        String clientContent = mockMvc.perform(post("/api/clients")
+                        .header("Authorization", "Bearer " + managerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clientBody))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long managerClientId = objectMapper.readTree(clientContent).get("id").asLong();
+
+        TaskResponse created = createTaskViaApi("Fix bug", "NEW", managerClientId, managerToken);
+        updateTaskStatusViaApi(created.getId(), "IN_PROGRESS", managerToken, 200);
+        updateTaskStatusViaApi(created.getId(), "DONE", managerToken, 200);
+
+        updateTaskStatusViaApi(created.getId(), "IN_PROGRESS", managerToken, 409);
+    }
 }

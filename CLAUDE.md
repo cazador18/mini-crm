@@ -103,15 +103,22 @@ in the three `*ServiceImpl` classes always `findOrThrow` first (real 404 if the 
 at all) then `ownershipGuard.check(...)` (403 if it exists but isn't yours) — never conflate the
 two, the order matters for getting the right status code.
 
+**Task status transitions**: only `NEW→IN_PROGRESS` and `IN_PROGRESS→DONE` are allowed for
+ADMIN/MANAGER; `DONE→IN_PROGRESS` is ADMIN-only; skipping a step (`NEW→DONE`) is never allowed,
+even for ADMIN; re-submitting the same status is a no-op (no error). Enforced in
+`TaskServiceImpl.update()` via `validateStatusTransition(...)`, throws
+`InvalidTaskStatusTransitionException` → 409. Only `update()` checks this — `create()` has no
+prior status to transition from.
+
 `Task.client` and `Note.client` are `FetchType.LAZY` — always use DTOs in API responses to avoid lazy-loading issues. Repositories expose `findAllByOrderByIdAsc(...)` instead of `findAll()` for deterministic ordering — follow this convention for any new entity.
 
 ## Current state
 
 Fully implemented MVP:
 
-- **Backend**: entities (`Client`, `Task`, `Note`, `User`), DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, dashboard aggregation endpoint, global exception handler, CORS config, JWT auth (`POST /api/auth/register`/`login`, all other `/api/**` require a valid `Authorization: Bearer` token), RBAC (ADMIN/MANAGER/VIEWER, `Client.owner`-scoped visibility for MANAGER)
+- **Backend**: entities (`Client`, `Task`, `Note`, `User`, `AuditLog`), DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, dashboard aggregation endpoint, global exception handler, CORS config, JWT auth (`POST /api/auth/register`/`login`, all other `/api/**` require a valid `Authorization: Bearer` token), RBAC (ADMIN/MANAGER/VIEWER, `Client.owner`-scoped visibility for MANAGER), task status transition rules, audit log (`GET /api/audit`, ADMIN-only)
 - **Frontend**: `/login` (stores JWT in `localStorage`), dashboard (`/`), `/clients` (CRUD), `/tasks` (CRUD + filters by status/clientId) — these three live under the `(app)` route group so they share the sidebar layout that `/login` deliberately doesn't get
-- **Tests**: unit tests (Mockito) for `ClientServiceImpl`, `TaskServiceImpl`, `NoteServiceImpl`, `DashboardServiceImpl`, `AuthServiceImpl`, `JwtService`; integration tests (MockMvc + Testcontainers PostgreSQL) for `ClientController`, `TaskController`, `DashboardController`
+- **Tests**: unit tests (Mockito) for `ClientServiceImpl`, `TaskServiceImpl`, `NoteServiceImpl`, `DashboardServiceImpl`, `AuthServiceImpl`, `AuditServiceImpl`, `JwtService`, `RateLimitFilter`; integration tests (MockMvc + Testcontainers PostgreSQL) for `ClientController`, `TaskController`, `DashboardController`, `AuditController`
 
 Bootstrap login for local/docker environments: `admin` / `admin123` (seeded by Flyway `V4__seed_admin.sql`,
 role ADMIN). Self-registration via `POST /api/auth/register` always creates role MANAGER — there is no
@@ -133,6 +140,21 @@ Spring context in `AbstractIntegrationTest` means those login-helper calls would
 the limiter partway through an IT run). The bean is always created regardless of the flag — it
 just becomes a pass-through no-op when disabled — because `SecurityConfig` wires it
 unconditionally via constructor injection.
+
+### Audit log
+
+`audit_log` table (`V6__add_audit_log.sql` — the task that requested this called it `V3`, but
+`V3` was already `add_users`; migrations are numbered by what's next in the folder, not by what
+a request happens to say). `AuditService.log(action, entity, entityId)` is called explicitly at
+the end of every successful `create`/`update`/`delete` in `ClientServiceImpl`/`TaskServiceImpl`
+(same transaction as the mutation — a rolled-back operation never leaves an audit row). `Note` is
+not audited (out of scope). `who` is a denormalized username string, not a `users` FK. A `Task`
+update whose status changed logs a single `STATUS_CHANGE` entry instead of `UPDATE` (not both) —
+`entity` is always `"CLIENT"`/`"TASK"`, `action` one of `CREATE`/`UPDATE`/`DELETE`/`STATUS_CHANGE`.
+`GET /api/audit` (`AuditController`, `@PreAuthorize("hasRole('ADMIN')")`) returns
+`PageResponse<AuditLogResponse>` sorted newest-first (`findAllByOrderByTimestampDesc` — the one
+list endpoint in this codebase that intentionally doesn't follow the `findAllByOrderByIdAsc`
+convention, since "most recent first" is what an audit trail needs).
 
 ## Claude Code project assets
 
