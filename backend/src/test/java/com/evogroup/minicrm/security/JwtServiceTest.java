@@ -53,4 +53,25 @@ class JwtServiceTest {
 
         assertThat(verifier.isValid(token)).isFalse();
     }
+
+    @Test
+    void isValid_returnsFalse_forGarbageString() {
+        JwtService service = new JwtService(SECRET, 60_000);
+
+        assertThat(service.isValid("not-a-jwt-at-all")).isFalse();
+    }
+
+    @Test
+    void isValid_returnsFalse_forEmptyString() {
+        JwtService service = new JwtService(SECRET, 60_000);
+
+        assertThat(service.isValid("")).isFalse();
+    }
+
+    @Test
+    void isValid_returnsFalse_forNullToken() {
+        JwtService service = new JwtService(SECRET, 60_000);
+
+        assertThat(service.isValid(null)).isFalse();
+    }
 }
