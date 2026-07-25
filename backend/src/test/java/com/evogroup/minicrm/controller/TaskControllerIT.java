@@ -340,11 +340,15 @@ class TaskControllerIT extends AbstractIntegrationTest {
     // ── status transition rules ─────────────────────────────────────────────
 
     private void updateTaskStatusViaApi(Long taskId, String status, String token, int expectedStatus) throws Exception {
+        updateTaskStatusViaApi(taskId, status, savedClient.getId(), token, expectedStatus);
+    }
+
+    private void updateTaskStatusViaApi(Long taskId, String status, Long clientId, String token, int expectedStatus) throws Exception {
         String body = objectMapper.writeValueAsString(Map.of(
                 "title", "Fix bug",
                 "status", status,
                 "priority", "HIGH",
-                "clientId", savedClient.getId()));
+                "clientId", clientId));
 
         mockMvc.perform(put("/api/tasks/{id}", taskId)
                         .header("Authorization", "Bearer " + token)
@@ -382,9 +386,9 @@ class TaskControllerIT extends AbstractIntegrationTest {
         Long managerClientId = objectMapper.readTree(clientContent).get("id").asLong();
 
         TaskResponse created = createTaskViaApi("Fix bug", "NEW", managerClientId, managerToken);
-        updateTaskStatusViaApi(created.getId(), "IN_PROGRESS", managerToken, 200);
-        updateTaskStatusViaApi(created.getId(), "DONE", managerToken, 200);
+        updateTaskStatusViaApi(created.getId(), "IN_PROGRESS", managerClientId, managerToken, 200);
+        updateTaskStatusViaApi(created.getId(), "DONE", managerClientId, managerToken, 200);
 
-        updateTaskStatusViaApi(created.getId(), "IN_PROGRESS", managerToken, 409);
+        updateTaskStatusViaApi(created.getId(), "IN_PROGRESS", managerClientId, managerToken, 409);
     }
 }
