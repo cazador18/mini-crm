@@ -106,6 +106,19 @@ export function PencilIcon({ className = base }: IconProps) {
   );
 }
 
+export function LogoutIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 6.75V5.25A1.5 1.5 0 0 1 10.5 3.75h6a1.5 1.5 0 0 1 1.5 1.5v13.5a1.5 1.5 0 0 1-1.5 1.5h-6a1.5 1.5 0 0 1-1.5-1.5v-1.5"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h10.5m0 0-3-3m3 3-3 3" />
+    </svg>
+  );
+}
+
 export function TrashIcon({ className = base }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>

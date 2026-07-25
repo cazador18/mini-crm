@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: minicrm
       POSTGRES_USER: minicrm
-      POSTGRES_PASSWORD: minicrm
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-minicrm}
     ports:
       - "5432:5432"
     volumes:
@@ -24,6 +24,8 @@ services:
     container_name: minicrm-backend
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — copy .env.example to .env and set it}
+      DB_PASSWORD: ${DB_PASSWORD:-minicrm}
     depends_on:
       db:
         condition: service_healthy

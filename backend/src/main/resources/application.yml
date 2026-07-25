@@ -5,6 +5,15 @@ spring:
   profiles:
     active: dev
 
+app:
+  cors:
+    allowed-origins: http://localhost:3000
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: 86400000
+  rate-limit:
+    enabled: true
+
 ---
 spring:
   config:
@@ -22,6 +31,12 @@ spring:
   h2:
     console:
       enabled: true
+  flyway:
+    enabled: false
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-insecure-secret-key-please-override-in-production-env}
 
 ---
 spring:
@@ -34,7 +49,7 @@ spring:
     password: ${DB_PASSWORD:minicrm}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
 
 ---
@@ -48,6 +63,14 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+  flyway:
+    enabled: false
+
+app:
+  rate-limit:
+    enabled: false
+  jwt:
+    secret: ${JWT_SECRET:test-secret-key-not-for-production-use-minimum-32-bytes}
 
 ---
 spring:
@@ -56,5 +79,11 @@ spring:
       on-profile: integration-test
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     show-sql: false
+
+app:
+  rate-limit:
+    enabled: false
+  jwt:
+    secret: ${JWT_SECRET:test-secret-key-not-for-production-use-minimum-32-bytes}

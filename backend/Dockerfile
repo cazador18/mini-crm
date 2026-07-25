@@ -9,7 +9,9 @@ RUN mvn -B clean package -DskipTests
 # --- Run stage ---
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+RUN addgroup -S spring && adduser -S spring -G spring
+COPY --from=build --chown=spring:spring /app/target/*.jar app.jar
+USER spring
 EXPOSE 8080
 ENV SPRING_PROFILES_ACTIVE=docker
 ENTRYPOINT ["java", "-jar", "app.jar"]

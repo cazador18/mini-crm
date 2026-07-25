@@ -25,6 +25,10 @@ public class Client {
     @Column(name = "created_at", updatable = false)
     private Instant createdAt = Instant.now();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private User owner;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -39,4 +43,7 @@ public class Client {
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    public User getOwner() { return owner; }
+    public void setOwner(User owner) { this.owner = owner; }
 }

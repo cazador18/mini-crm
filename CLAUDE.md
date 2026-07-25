@@ -25,10 +25,10 @@ cd backend && ./mvnw spring-boot:run
 cd backend && ./mvnw test
 
 # Backend — single test class
-cd backend && ./mvnw test -Dtest=ClientServiceTest
+cd backend && ./mvnw test -Dtest=ClientServiceImplTest
 
 # Backend — single test method
-cd backend && ./mvnw test -Dtest=ClientServiceTest#createClient_shouldReturnDto
+cd backend && ./mvnw test -Dtest=ClientServiceImplTest#createClient_shouldReturnDto
 
 # Frontend — local dev
 cd frontend && npm run dev
@@ -39,12 +39,17 @@ cd frontend && npm run lint
 
 ## Spring profiles
 
-| Profile            | Datasource | DDL          | When used                          |
-|--------------------|------------|--------------|------------------------------------|
-| `dev`              | H2 in-mem  | `update`     | Default for local run              |
-| `docker`           | PostgreSQL | `update`     | Docker Compose                     |
-| `test`             | H2 in-mem  | `create-drop`| `./mvnw test` (unit tests)         |
-| `integration-test` | PostgreSQL (Testcontainers) | `create-drop` | IT controller tests |
+| Profile            | Datasource | DDL          | Flyway | When used                          |
+|--------------------|------------|--------------|--------|-------------------------------------|
+| `dev`              | H2 in-mem  | `update`     | off    | Default for local run              |
+| `docker`           | PostgreSQL | `validate`   | on     | Docker Compose                     |
+| `test`             | H2 in-mem  | `create-drop`| off    | `./mvnw test` (unit tests)         |
+| `integration-test` | PostgreSQL (Testcontainers) | `validate` | on | IT controller tests, real Flyway migrations |
+
+`docker`/`integration-test` never auto-generate schema — they run the versioned migrations in
+`db/migration/` and `validate` only checks Hibernate's entity mappings match. `dev`/`test` stay on
+H2 with Hibernate-managed DDL for a fast local loop; Flyway is explicitly disabled there
+(`spring.flyway.enabled: false`) so the Postgres-flavored migration SQL never runs against H2.
 
 H2 console available at `http://localhost:8080/h2-console` when running with `dev` profile.
 
@@ -78,22 +83,98 @@ Controller → Service (interface + impl) → Repository → Entity
 - **Models** (`model/`): JPA entities — `Client`, `Task`, enums `TaskStatus` (NEW/IN_PROGRESS/DONE), `TaskPriority` (LOW/MEDIUM/HIGH).
 - **DTOs** (`dto/`): separate request/response objects. Entities stay in the service layer.
 - **Exceptions** (`exception/`): custom exceptions + `@ControllerAdvice` for global error handling.
-- **Config** (`config/`): CORS, OpenAPI/Swagger, and other Spring configuration.
+- **Config** (`config/`): CORS, Spring Security filter chain, and other Spring configuration.
+- **Security** (`security/`): JWT issuing/parsing, the JWT auth filter, `CustomUserDetailsService`, REST-friendly 401/403 handlers (`RestAuthenticationEntryPoint`/`RestAccessDeniedHandler`), the RBAC helpers `CurrentUserService` (reads the authenticated `User` off `SecurityContextHolder` — inject this in services instead of calling `SecurityContextHolder` directly, it's what makes ownership logic mockable in `*ServiceImplTest`) and `OwnershipGuard` (`check(currentUser, client)` — throws `AccessDeniedException` when a MANAGER isn't the resource's owner; ADMIN/VIEWER always pass), and `RateLimitFilter` (Bucket4j, in-memory per-instance — see Rate limiting below).
 
 ## Domain model
 
-- `Client`: id, name, email, phone, createdAt (Instant)
+- `Client`: id, name, email, phone, createdAt (Instant), owner (ManyToOne → User, set server-side to the
+  creating user — never accepted from the client in `ClientRequest`)
 - `Task`: id, title, description, status, priority, deadline (LocalDate), client (ManyToOne → Client)
+- `Note`: id, content, createdAt (Instant), client (ManyToOne → Client) — generated via the `/crud-generator` skill; use it as the reference example when adding a new entity of this shape
+- `User`: id, username, email, passwordHash, role (`UserRole`: ADMIN/MANAGER/VIEWER), enabled — implements `UserDetails` directly (no separate principal wrapper class)
+- Dashboard: not an entity — `DashboardService`/`DashboardController` aggregate task counts by status for the `/` frontend page
 
-`Task.client` is `FetchType.LAZY` — always use DTOs in API responses to avoid lazy-loading issues.
+**RBAC**: `Task`/`Note` have no owner of their own — visibility/ownership always traces through
+`.getClient().getOwner()`. MANAGER sees/mutates only clients (and their tasks/notes) they own;
+ADMIN and VIEWER see everything; VIEWER is blocked from all POST/PUT/DELETE via
+`@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")` on the controllers. `findById`/`update`/`delete`
+in the three `*ServiceImpl` classes always `findOrThrow` first (real 404 if the id doesn't exist
+at all) then `ownershipGuard.check(...)` (403 if it exists but isn't yours) — never conflate the
+two, the order matters for getting the right status code.
+
+**Task status transitions**: only `NEW→IN_PROGRESS` and `IN_PROGRESS→DONE` are allowed for
+ADMIN/MANAGER; `DONE→IN_PROGRESS` is ADMIN-only; skipping a step (`NEW→DONE`) is never allowed,
+even for ADMIN; re-submitting the same status is a no-op (no error). Enforced in
+`TaskServiceImpl.update()` via `validateStatusTransition(...)`, throws
+`InvalidTaskStatusTransitionException` → 409. Only `update()` checks this — `create()` has no
+prior status to transition from.
+
+`Task.client` and `Note.client` are `FetchType.LAZY` — always use DTOs in API responses to avoid lazy-loading issues. Repositories expose `findAllByOrderByIdAsc(...)` instead of `findAll()` for deterministic ordering — follow this convention for any new entity.
 
 ## Current state
 
 Fully implemented MVP:
 
-- **Backend**: entities, DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, global exception handler, CORS config
-- **Frontend**: dashboard (`/`), `/clients` (CRUD), `/tasks` (CRUD + filters by status/clientId)
-- **Tests**: unit tests (Mockito) for ClientServiceImpl + TaskServiceImpl; integration tests (Testcontainers PostgreSQL) for ClientController + TaskController
+- **Backend**: entities (`Client`, `Task`, `Note`, `User`, `AuditLog`), DTOs, repositories (with `findAllByOrderByIdAsc` sorting), services, controllers, dashboard aggregation endpoint, global exception handler, CORS config, JWT auth (`POST /api/auth/register`/`login`, all other `/api/**` require a valid `Authorization: Bearer` token), RBAC (ADMIN/MANAGER/VIEWER, `Client.owner`-scoped visibility for MANAGER), task status transition rules, audit log (`GET /api/audit`, ADMIN-only)
+- **Frontend**: `/login` (stores JWT in `localStorage`), dashboard (`/`), `/clients` (CRUD), `/tasks` (CRUD + filters by status/clientId) — these three live under the `(app)` route group so they share the sidebar layout that `/login` deliberately doesn't get
+- **Tests**: unit tests (Mockito) for `ClientServiceImpl`, `TaskServiceImpl`, `NoteServiceImpl`, `DashboardServiceImpl`, `AuthServiceImpl`, `AuditServiceImpl`, `JwtService`, `RateLimitFilter`, `OwnershipGuard`, `CurrentUserServiceImpl`; integration tests (MockMvc + Testcontainers PostgreSQL) for `ClientController`, `TaskController`, `DashboardController`, `AuditController`, `AuthController` (`AuthControllerIT` — register/login contract, login→access happy path), and `RateLimitIT` (real HTTP stack, `@TestPropertySource(properties = "app.rate-limit.enabled=true")` to get its own isolated Spring context instead of the shared one every other IT class reuses — otherwise their `adminToken()`/`registerManagerAndLogin()` calls would exhaust the login bucket)
+
+Bootstrap login for local/docker environments: `admin` / `admin123` (seeded by Flyway `V4__seed_admin.sql`,
+role ADMIN). Self-registration via `POST /api/auth/register` always creates role MANAGER — there is no
+API to create ADMIN/VIEWER accounts, only the Flyway seed and direct DB inserts (see Known limitations).
+
+### Rate limiting
+
+`RateLimitFilter` (Bucket4j, `security/RateLimitFilter.java`) sits in the security filter chain
+before `JwtAuthenticationFilter` — a request that's already over budget shouldn't pay for JWT
+parsing. Two independent in-memory bucket maps, keyed per request:
+- `POST /api/auth/login` — 5/min, always by IP (no token exists yet at login time).
+- everything else under `/api/**` (including `/api/auth/register`) — 100/min, keyed by
+  `user:<username>` when the request carries a valid JWT, else `ip:<addr>`. The filter parses the
+  `Authorization` header itself via `JwtService` rather than reading `SecurityContextHolder`,
+  since it runs *before* `JwtAuthenticationFilter` populates it.
+Over the limit → `429` + `Retry-After` (seconds) + `{"error": "Too many requests"}`. Controlled by
+`app.rate-limit.enabled` (default `true`; `false` in `test`/`integration-test` — the shared
+Spring context in `AbstractIntegrationTest` means those login-helper calls would otherwise trip
+the limiter partway through an IT run). The bean is always created regardless of the flag — it
+just becomes a pass-through no-op when disabled — because `SecurityConfig` wires it
+unconditionally via constructor injection.
+
+### Audit log
+
+`audit_log` table (`V6__add_audit_log.sql` — the task that requested this called it `V3`, but
+`V3` was already `add_users`; migrations are numbered by what's next in the folder, not by what
+a request happens to say). `AuditService.log(action, entity, entityId)` is called explicitly at
+the end of every successful `create`/`update`/`delete` in `ClientServiceImpl`/`TaskServiceImpl`
+(same transaction as the mutation — a rolled-back operation never leaves an audit row). `Note` is
+not audited (out of scope). `who` is a denormalized username string, not a `users` FK. A `Task`
+update whose status changed logs a single `STATUS_CHANGE` entry instead of `UPDATE` (not both) —
+`entity` is always `"CLIENT"`/`"TASK"`, `action` one of `CREATE`/`UPDATE`/`DELETE`/`STATUS_CHANGE`.
+`GET /api/audit` (`AuditController`, `@PreAuthorize("hasRole('ADMIN')")`) returns
+`PageResponse<AuditLogResponse>` sorted newest-first (`findAllByOrderByTimestampDesc` — the one
+list endpoint in this codebase that intentionally doesn't follow the `findAllByOrderByIdAsc`
+convention, since "most recent first" is what an audit trail needs).
+
+## Claude Code project assets
+
+This repo is also a learning ground for Claude Code's extensibility, and has working examples of each checked in:
+
+- **Skill** — `.claude/skills/crud-generator/SKILL.md`: generates the full CRUD layer (entity, repository, request/response DTOs, service interface+impl, controller, not-found exception, unit test) for a new JPA entity, following the exact patterns of `Task`/`TaskServiceImpl`/etc. Use this instead of hand-writing a new entity's CRUD layer.
+- **Subagent** — `.claude/agents/code-reviewer.md`: architectural reviewer that checks files against four rules derived from this document (no business logic in controllers, service interface+impl pairing, entities never returned from services/controllers, constructor injection only).
+- **Slash command** — `.claude/commands/security-check.md`: backend security review across input validation, SQL injection, unauthenticated endpoints, CORS config, and stack-trace leakage.
+
+## Known limitations (tracked, not fixed — see README.md for full detail)
+
+- Default seeded ADMIN credentials (`admin`/`admin123`, `V4__seed_admin.sql`) are public in this repo —
+  rotate immediately in any real deployment. There is no user-management API to create/promote
+  ADMIN or VIEWER accounts; self-register always yields MANAGER.
+- DTOs are hand-written classes with getters/setters rather than Java `record`s.
+- Frontend pinned to Next.js 14.2.35 (latest patch in the 14.x line, not the true npm latest) —
+  `npm audit` still reports one high-severity advisory range (9.x–16.3.0-canary.5, DoS/cache-poisoning/XSS
+  in Next.js) whose fix requires the major jump to 16.x. Deliberately deferred: a 14→16 major upgrade
+  needs live browser verification (App Router/fetch-caching behavior changes) not available when this
+  was assessed. Revisit before any production use.
 
 ## Testing approach
 
